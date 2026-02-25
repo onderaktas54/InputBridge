@@ -1,0 +1,266 @@
+using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using InputBridge.Core.Protocol;
+
+namespace InputBridge.Host.Hooks;
+
+[StructLayout(LayoutKind.Sequential)]
+public struct MSLLHOOKSTRUCT
+{
+    public POINT pt;
+    public uint mouseData;
+    public uint flags;
+    public uint time;
+    public IntPtr dwExtraInfo;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct POINT
+{
+    public int x;
+    public int y;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct RECT
+{
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
+}
+
+public sealed class MouseHook : IDisposable
+{
+    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern IntPtr GetModuleHandle(string lpModuleName);
+
+    [DllImport("user32.dll")]
+    private static extern bool ClipCursor(ref RECT lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern bool ClipCursor(IntPtr lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int X, int Y);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int nIndex);
+
+    private const int SM_CXSCREEN = 0;
+    private const int SM_CYSCREEN = 1;
+
+    private const int WH_MOUSE_LL = 14;
+    private const int WM_MOUSEMOVE = 0x0200;
+    private const int WM_LBUTTONDOWN = 0x0201;
+    private const int WM_LBUTTONUP = 0x0202;
+    private const int WM_RBUTTONDOWN = 0x0204;
+    private const int WM_RBUTTONUP = 0x0205;
+    private const int WM_MBUTTONDOWN = 0x0207;
+    private const int WM_MBUTTONUP = 0x0208;
+    private const int WM_MOUSEWHEEL = 0x020A;
+    private const int WM_XBUTTONDOWN = 0x020B;
+    private const int WM_XBUTTONUP = 0x020C;
+
+    private IntPtr _hookId = IntPtr.Zero;
+    private readonly LowLevelMouseProc _proc;
+
+    private bool _isRemoteMode = false;
+    private uint _nextSeq = 1;
+    private bool _isFirstMove = true;
+    private int _lastX;
+    private int _lastY;
+    private int _centerX;
+    private int _centerY;
+
+    public event Action<InputPacket>? MouseEvent;
+
+    public MouseHook()
+    {
+        _proc = HookCallback;
+        _centerX = GetSystemMetrics(SM_CXSCREEN) / 2;
+        _centerY = GetSystemMetrics(SM_CYSCREEN) / 2;
+    }
+
+    public void SetRemoteMode(bool isRemote)
+    {
+        if (_isRemoteMode == isRemote) return;
+        _isRemoteMode = isRemote;
+
+        if (_isRemoteMode)
+        {
+            _isFirstMove = true;
+            LockCursorToCenter();
+        }
+        else
+        {
+            UnlockCursor();
+        }
+    }
+
+    private void LockCursorToCenter()
+    {
+        SetCursorPos(_centerX, _centerY);
+    }
+
+    private void UnlockCursor()
+    {
+        ClipCursor(IntPtr.Zero);
+    }
+
+    private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0)
+        {
+            MSLLHOOKSTRUCT hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+            int msg = wParam.ToInt32();
+
+            bool blockInput = _isRemoteMode;
+            InputPacket? packet = null;
+
+            switch (msg)
+            {
+                case WM_MOUSEMOVE:
+                    if (_isFirstMove)
+                    {
+                        _lastX = hookStruct.pt.x;
+                        _lastY = hookStruct.pt.y;
+                        _isFirstMove = false;
+                        
+                        // We reset cursor to center to prevent hitting screen edges
+                        if (_isRemoteMode) LockCursorToCenter();
+                    }
+                    else
+                    {
+                        int deltaX = hookStruct.pt.x - _lastX;
+                        int deltaY = hookStruct.pt.y - _lastY;
+
+                        // Only send if there's actual motion
+                        if (deltaX != 0 || deltaY != 0)
+                        {
+                            packet = CreatePacket(InputType.MouseMove, deltaX, deltaY);
+                            
+                            if (_isRemoteMode)
+                            {
+                                // Force center update
+                                _lastX = _centerX;
+                                _lastY = _centerY;
+                                LockCursorToCenter();
+                            }
+                            else
+                            {
+                                _lastX = hookStruct.pt.x;
+                                _lastY = hookStruct.pt.y;
+                            }
+                        }
+                    }
+                    // For WM_MOUSEMOVE, if we lock it to center, we return 1 to block OS processing
+                    // However, SetCursorPos will itself generate a WM_MOUSEMOVE. 
+                    // To differentiate physical movement from injected movement, LLMHF_INJECTED could be checked,
+                    // but we will keep it simple here.
+                    break;
+
+                case WM_LBUTTONDOWN:
+                    packet = CreatePacket(InputType.MouseButtonDown, 0, 0);
+                    break;
+                case WM_LBUTTONUP:
+                    packet = CreatePacket(InputType.MouseButtonUp, 0, 0);
+                    break;
+                case WM_RBUTTONDOWN:
+                    packet = CreatePacket(InputType.MouseButtonDown, 1, 0);
+                    break;
+                case WM_RBUTTONUP:
+                    packet = CreatePacket(InputType.MouseButtonUp, 1, 0);
+                    break;
+                case WM_MBUTTONDOWN:
+                    packet = CreatePacket(InputType.MouseButtonDown, 2, 0);
+                    break;
+                case WM_MBUTTONUP:
+                    packet = CreatePacket(InputType.MouseButtonUp, 2, 0);
+                    break;
+                case WM_MOUSEWHEEL:
+                    // hookStruct.mouseData contains wheel delta in high order word
+                    short wheelDelta = (short)(hookStruct.mouseData >> 16);
+                    packet = CreatePacket(InputType.MouseScroll, (int)wheelDelta, 0);
+                    break;
+                case WM_XBUTTONDOWN:
+                case WM_XBUTTONUP:
+                    int xButton = (int)(hookStruct.mouseData >> 16); // 1 for XBUTTON1, 2 for XBUTTON2
+                    int buttonId = xButton == 1 ? 3 : 4;
+                    packet = CreatePacket(msg == WM_XBUTTONDOWN ? InputType.MouseButtonDown : InputType.MouseButtonUp, buttonId, 0);
+                    break;
+            }
+
+            if (packet.HasValue)
+            {
+                MouseEvent?.Invoke(packet.Value);
+            }
+
+            if (blockInput)
+            {
+                return (IntPtr)1;
+            }
+        }
+
+        return CallNextHookEx(_hookId, nCode, wParam, lParam);
+    }
+
+    private InputPacket CreatePacket(InputType type, int data1, int data2)
+    {
+        return new InputPacket
+        {
+            Version = 1,
+            Type = type,
+            Data1 = data1,
+            Data2 = data2,
+            Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            SequenceNumber = unchecked(_nextSeq++)
+        };
+    }
+
+    public void Install()
+    {
+        if (_hookId != IntPtr.Zero) return;
+
+        using var curProcess = Process.GetCurrentProcess();
+        using var curModule = curProcess.MainModule;
+
+        if (curModule?.ModuleName != null)
+        {
+            _hookId = SetWindowsHookEx(WH_MOUSE_LL, _proc, GetModuleHandle(curModule.ModuleName), 0);
+
+            if (_hookId == IntPtr.Zero)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+        }
+    }
+
+    public void Uninstall()
+    {
+        if (_hookId != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(_hookId);
+            _hookId = IntPtr.Zero;
+        }
+    }
+
+    public void Dispose()
+    {
+        Uninstall();
+        UnlockCursor();
+    }
+}

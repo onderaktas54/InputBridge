@@ -1,0 +1,13 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  InputBridge.Shared.UI -> C:\Users\önder\Desktop\Calismalar\ConnectedDevices\src\InputBridge.Shared.UI\bin\Debug\net8.0-windows\InputBridge.Shared.UI.dll
+  InputBridge.Core -> C:\Users\önder\Desktop\Calismalar\ConnectedDevices\src\InputBridge.Core\bin\Debug\net8.0\InputBridge.Core.dll
+  InputBridge.Client -> C:\Users\önder\Desktop\Calismalar\ConnectedDevices\src\InputBridge.Client\bin\Debug\net8.0-windows\InputBridge.Client.dll
+  InputBridge.Core.Tests -> C:\Users\önder\Desktop\Calismalar\ConnectedDevices\tests\InputBridge.Core.Tests\bin\Debug\net8.0\InputBridge.Core.Tests.dll
+  InputBridge.Host -> C:\Users\önder\Desktop\Calismalar\ConnectedDevices\src\InputBridge.Host\bin\Debug\net8.0-windows\InputBridge.Host.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.41

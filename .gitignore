@@ -1,0 +1,29 @@
+# Ignore all Markdown files except README.md and LICENSE
+*.md
+!README.md
+!LICENSE
+
+# Ignore custom settings files locally generated
+settings.json
+appsettings.Development.json
+appsettings.json
+
+# Don't publish user's brain/gemini internal folders
+.gemini/
+.antigravity/
+
+# .NET Specific
+[Bb]in/
+[Oo]bj/
+TestResults/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.log
+*.sqlite
+*.exe
+*.dll
+*.zip
+.vs/
+.vscode/
