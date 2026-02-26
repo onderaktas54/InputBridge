@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace InputBridge.Client.Simulation;
@@ -64,6 +66,16 @@ public sealed class MouseSimulator
     private const uint MOUSEEVENTF_XUP = 0x0100;
     private const uint MOUSEEVENTF_WHEEL = 0x0800;
 
+    private readonly ConcurrentDictionary<int, bool> _pressedButtons = new();
+
+    public void ReleaseAllButtons()
+    {
+        foreach (var key in _pressedButtons.Keys.ToArray())
+        {
+            SimulateMouseButton(key, isDown: false);
+        }
+    }
+
     public void SimulateMouseMove(int deltaX, int deltaY)
     {
         var input = new INPUT
@@ -87,6 +99,11 @@ public sealed class MouseSimulator
 
     public void SimulateMouseButton(int buttonId, bool isDown)
     {
+        if (isDown)
+            _pressedButtons[buttonId] = true;
+        else
+            _pressedButtons.TryRemove(buttonId, out _);
+
         uint flags = 0;
         uint mouseData = 0;
 

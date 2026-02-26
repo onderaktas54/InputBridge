@@ -54,10 +54,9 @@ public sealed class InputRouter : IDisposable
 
     public void SwitchMode(RoutingMode targetMode)
     {
-        // Don't switch if we can't send data to remote
         if (targetMode == RoutingMode.Remote && (_tcpTransport == null || !_tcpTransport.IsConnected))
         {
-            NotificationRequested?.Invoke(" Bağlantı Yok! İstemciye geçilemiyor.");
+            NotificationRequested?.Invoke(" No Connection! Cannot switch to client.");
             return;
         }
 
@@ -69,11 +68,11 @@ public sealed class InputRouter : IDisposable
         
         if (isRemote)
         {
-            NotificationRequested?.Invoke(" Kontrol: Client PC");
+            NotificationRequested?.Invoke(" Control: Client PC");
         }
         else
         {
-            NotificationRequested?.Invoke(" Kontrol: Bu PC");
+            NotificationRequested?.Invoke(" Control: This PC");
         }
 
         ModeChanged?.Invoke(_currentMode);

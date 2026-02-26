@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace InputBridge.Client.Simulation;
@@ -61,14 +63,26 @@ public sealed class KeyboardSimulator
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint KEYEVENTF_SCANCODE = 0x0008;
 
+    private readonly ConcurrentDictionary<int, bool> _pressedKeys = new();
+
     public void SimulateKeyDown(int virtualKeyCode)
     {
+        _pressedKeys[virtualKeyCode] = true;
         SendKeyboardInput((ushort)virtualKeyCode, isKeyDown: true);
     }
 
     public void SimulateKeyUp(int virtualKeyCode)
     {
+        _pressedKeys.TryRemove(virtualKeyCode, out _);
         SendKeyboardInput((ushort)virtualKeyCode, isKeyDown: false);
+    }
+
+    public void ReleaseAllKeys()
+    {
+        foreach (var key in _pressedKeys.Keys.ToArray())
+        {
+            SimulateKeyUp(key);
+        }
     }
 
     private void SendKeyboardInput(ushort virtualKeyCode, bool isKeyDown)
