@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 using InputBridge.Core.Crypto;
 using InputBridge.Core.Network;
 using InputBridge.Core.Protocol;
@@ -29,6 +30,7 @@ public sealed class ConnectionManager : IDisposable
         {
             if (_state != value)
             {
+                Log.Information("[Host] State: {OldState} → {NewState}", _state, value);
                 _state = value;
                 StateChanged?.Invoke(_state);
             }
@@ -136,15 +138,19 @@ public sealed class ConnectionManager : IDisposable
 
                 // If loop exits (disconnect), cleanup and loop will repeat (Reconnecting)
                 _router.HandleDisconnect();
+                udpTransport.Dispose();
+                tcpTransport.Dispose();
+                client.Dispose();
                 State = ConnectionState.Reconnecting;
-                await Task.Delay(2000, ct); // Wait before discovering again
+                try { await Task.Delay(2000, ct); } catch { } // Wait before discovering again
             }
             catch (OperationCanceledException)
             {
                 break;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Log.Error(ex, "[Host] RunHostLoopAsync error");
                 _router.HandleDisconnect();
                 State = ConnectionState.Reconnecting;
                 try { await Task.Delay(2000, ct); } catch { }
@@ -174,6 +180,7 @@ public sealed class ConnectionManager : IDisposable
                     {
                         Interlocked.Exchange(ref missedHeartbeats, 0);
                         var rtt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - packet.Timestamp;
+                        Log.Debug("[Host] Heartbeat reply received. RTT: {RTT}ms. Missed reset.", rtt);
                         LatencyMeasured?.Invoke((int)(rtt / 2)); // Round Trip Time / 2 = One-way Latency
                     }
                 }
@@ -188,9 +195,10 @@ public sealed class ConnectionManager : IDisposable
         {
             while (!ct.IsCancellationRequested && tcpTransport.IsConnected)
             {
-                if (Volatile.Read(ref missedHeartbeats) >= 5)
+                var missed = Volatile.Read(ref missedHeartbeats);
+                if (missed >= 5)
                 {
-                    // Disconnect
+                    Log.Warning("[Host] ⚠ Heartbeat missed {Count}/5! Disconnecting...", missed);
                     break;
                 }
 
@@ -205,7 +213,10 @@ public sealed class ConnectionManager : IDisposable
                 var encData = crypto.Encrypt(PacketSerializer.Serialize(heartbeat));
                 await tcpTransport.SendAsync(encData, ct);
                 
-                Interlocked.Increment(ref missedHeartbeats);
+                var currentMissed = Interlocked.Increment(ref missedHeartbeats);
+                Log.Debug("[Host] Heartbeat #{Seq} sent. Missed: {Missed}", heartbeat.SequenceNumber, currentMissed);
+                
+                Log.Debug("[Host] TcpTransport.IsConnected = {Status}", tcpTransport.IsConnected);
                 await Task.Delay(2000, ct);
             }
         }

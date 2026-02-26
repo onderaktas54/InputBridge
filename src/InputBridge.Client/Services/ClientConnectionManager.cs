@@ -2,6 +2,7 @@ using System;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Serilog;
 using InputBridge.Client.Simulation;
 using InputBridge.Core.Crypto;
 using InputBridge.Core.Network;
@@ -28,6 +29,7 @@ public sealed class ClientConnectionManager : IDisposable
         {
             if (_state != value)
             {
+                Log.Information("[Client] State: {OldState} → {NewState}", _state, value);
                 _state = value;
                 StateChanged?.Invoke(_state);
             }
@@ -84,7 +86,7 @@ public sealed class ClientConnectionManager : IDisposable
                 var host = hosts[0]; // Connect to the first discovered host
                 State = ConnectionState.Connecting;
 
-                using var tcpClient = new TcpClient();
+                var tcpClient = new TcpClient();
                 await tcpClient.ConnectAsync(host.IpAddress, host.Port, ct);
 
                 var sessionInfo = await _handshake.PerformAsClient(tcpClient, SharedSecret);
@@ -106,20 +108,27 @@ public sealed class ClientConnectionManager : IDisposable
                 // Wait while connected
                 while (!ct.IsCancellationRequested && tcpTransport.IsConnected)
                 {
+                    Log.Debug("[Client] TCP IsConnected check: {Status}", tcpTransport.IsConnected);
                     await Task.Delay(1000, ct);
                 }
 
+                Log.Warning("[Client] ⚠ Connection lost. TCP IsConnected = false");
                 // If loop exits, connection is lost.
                 _listener.Stop();
+                _listener.Dispose();
+                udpTransport.Dispose();
+                tcpTransport.Dispose();
+                tcpClient.Dispose(); // explicit dispose immediately
                 State = ConnectionState.Reconnecting;
-                await Task.Delay(2000, ct);
+                try { await Task.Delay(2000, ct); } catch { }
             }
             catch (OperationCanceledException)
             {
                 break; // Graceful exit
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Log.Error(ex, "[Client] RunClientLoopAsync error");
                 _listener?.Stop();
                 try { _keyboard.ReleaseAllKeys(); } catch { }
                 try { _keyboard.ReleaseModifierKeys(); } catch { }
