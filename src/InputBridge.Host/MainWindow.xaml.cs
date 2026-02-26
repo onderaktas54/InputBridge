@@ -32,6 +32,8 @@ public partial class MainWindow : Window
         _mouseHook = new MouseHook();
         _hotkeyManager = new HotkeyManager();
 
+        _keyboardHook.IsRegisteredHotkey = _hotkeyManager.IsRegisteredHotkey;
+
         _inputRouter = new InputRouter(_keyboardHook, _mouseHook, _hotkeyManager);
         _inputRouter.ModeChanged += OnRoutingModeChanged;
 
@@ -73,11 +75,19 @@ public partial class MainWindow : Window
         TxtSecret.Text = _appSettings.Security.SharedSecret;
     }
 
+    private string FormatHotkeyForDisplay(string rawHotkey)
+    {
+        if (string.IsNullOrEmpty(rawHotkey)) return "";
+        return rawHotkey
+            .Replace("D1", "1").Replace("D2", "2").Replace("D3", "3")
+            .Replace("Escape", "Esc");
+    }
+
     private void RefreshHotkeys()
     {
         _hotkeyManager.ReRegister(_appSettings.Hotkeys.SwitchToHost, _appSettings.Hotkeys.SwitchToClient1, _appSettings.Hotkeys.EmergencyRelease);
-        TxtLocalHotkeyDisplay.Text = _appSettings.Hotkeys.SwitchToHost;
-        TxtRemoteHotkeyDisplay.Text = _appSettings.Hotkeys.SwitchToClient1;
+        TxtLocalHotkeyDisplay.Text = FormatHotkeyForDisplay(_appSettings.Hotkeys.SwitchToHost);
+        TxtRemoteHotkeyDisplay.Text = FormatHotkeyForDisplay(_appSettings.Hotkeys.SwitchToClient1);
     }
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)

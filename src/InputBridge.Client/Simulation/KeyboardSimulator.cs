@@ -85,6 +85,16 @@ public sealed class KeyboardSimulator
         }
     }
 
+    public void ReleaseModifierKeys()
+    {
+        // Release Ctrl (17), Alt (18), Shift (16), Win (91/92)
+        SimulateKeyUp(17);
+        SimulateKeyUp(18);
+        SimulateKeyUp(16);
+        SimulateKeyUp(91); // LWIN
+        SimulateKeyUp(92); // RWIN
+    }
+
     private void SendKeyboardInput(ushort virtualKeyCode, bool isKeyDown)
     {
         ushort scanCode = (ushort)MapVirtualKey(virtualKeyCode, MAPVK_VK_TO_VSC);

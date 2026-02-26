@@ -65,6 +65,8 @@ public sealed class ClientConnectionManager : IDisposable
     {
         _mainCts?.Cancel();
         _listener?.Stop();
+        try { _keyboard.ReleaseAllKeys(); } catch { }
+        try { _keyboard.ReleaseModifierKeys(); } catch { }
         State = ConnectionState.Disconnected;
     }
 
@@ -95,7 +97,7 @@ public sealed class ClientConnectionManager : IDisposable
                 State = ConnectionState.Connected;
 
                 var tcpTransport = new TcpTransport(tcpClient);
-                var udpTransport = new UdpTransport(7200, host.IpAddress, 7200);
+                var udpTransport = new UdpTransport(host.Port - 1, host.IpAddress, host.Port - 1);
                 var crypto = new AesTransport(sessionInfo.AesKey);
 
                 _listener = new PacketListener(_keyboard, _mouse, udpTransport, tcpTransport, crypto);
@@ -110,7 +112,7 @@ public sealed class ClientConnectionManager : IDisposable
                 // If loop exits, connection is lost.
                 _listener.Stop();
                 State = ConnectionState.Reconnecting;
-                await Task.Delay(3000, ct);
+                await Task.Delay(2000, ct);
             }
             catch (OperationCanceledException)
             {
@@ -119,8 +121,10 @@ public sealed class ClientConnectionManager : IDisposable
             catch (Exception)
             {
                 _listener?.Stop();
+                try { _keyboard.ReleaseAllKeys(); } catch { }
+                try { _keyboard.ReleaseModifierKeys(); } catch { }
                 State = ConnectionState.Reconnecting;
-                try { await Task.Delay(3000, ct); } catch { }
+                try { await Task.Delay(2000, ct); } catch { }
             }
         }
     }

@@ -25,8 +25,8 @@ public sealed class HotkeyManager : IDisposable
     private uint VK_CLIENT = 0x32; // '2'
     private uint VK_ESCAPE = 0x1B;
 
-    private uint MOD_HOST = MOD_CONTROL | MOD_ALT;
-    private uint MOD_CLIENT = MOD_CONTROL | MOD_ALT;
+    private uint MOD_HOST = MOD_CONTROL | MOD_WIN;
+    private uint MOD_CLIENT = MOD_CONTROL | MOD_WIN;
     private uint MOD_EMERGENCY = MOD_CONTROL | MOD_ALT;
 
     public event Action? SwitchToHost;
@@ -86,6 +86,10 @@ public sealed class HotkeyManager : IDisposable
                 {
                     key = (uint)parsedKey;
                 }
+                else if (part.Length == 1 && char.IsLetterOrDigit(part[0]))
+                {
+                    key = char.ToUpper(part[0]);
+                }
             }
         }
 
@@ -137,5 +141,27 @@ public sealed class HotkeyManager : IDisposable
     public void Dispose()
     {
         Unregister();
+    }
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+    private const int VK_CONTROL_KEY = 0x11;
+    private const int VK_MENU_KEY = 0x12; // Alt
+    private const int VK_SHIFT_KEY = 0x10;
+    private const int VK_LWIN_KEY = 0x5B;
+    private const int VK_RWIN_KEY = 0x5C;
+
+    public bool IsRegisteredHotkey(int vkCode)
+    {
+        uint currentMods = 0;
+        if ((GetAsyncKeyState(VK_CONTROL_KEY) & 0x8000) != 0) currentMods |= MOD_CONTROL;
+        if ((GetAsyncKeyState(VK_MENU_KEY) & 0x8000) != 0) currentMods |= MOD_ALT;
+        if ((GetAsyncKeyState(VK_SHIFT_KEY) & 0x8000) != 0) currentMods |= MOD_SHIFT;
+        if (((GetAsyncKeyState(VK_LWIN_KEY) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RWIN_KEY) & 0x8000) != 0)) currentMods |= MOD_WIN;
+
+        if (vkCode == VK_HOST && currentMods == MOD_HOST) return true;
+        if (vkCode == VK_CLIENT && currentMods == MOD_CLIENT) return true;
+        if (vkCode == VK_ESCAPE && currentMods == MOD_EMERGENCY) return true;
+        return false;
     }
 }

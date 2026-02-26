@@ -47,7 +47,9 @@ public sealed class PacketListener : IDisposable
     {
         _cts?.Cancel();
         try { _keyboard.ReleaseAllKeys(); } catch { }
+        try { _keyboard.ReleaseModifierKeys(); } catch { }
         try { _mouse.ReleaseAllButtons(); } catch { }
+        try { _mouse.ResetPosition(); } catch { }
     }
 
     private async Task UdpListenLoop(CancellationToken ct)
@@ -145,7 +147,9 @@ public sealed class PacketListener : IDisposable
                 if (packet.Data1 == 0)
                 {
                     try { _keyboard.ReleaseAllKeys(); } catch { }
+                    try { _keyboard.ReleaseModifierKeys(); } catch { }
                     try { _mouse.ReleaseAllButtons(); } catch { }
+                    try { _mouse.ResetPosition(); } catch { }
                 }
                 SwitchModeRequested?.Invoke(packet.Data1);
                 break;

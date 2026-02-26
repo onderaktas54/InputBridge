@@ -16,10 +16,34 @@ public sealed class TcpTransport : ITransport
         _client.NoDelay = true; // Disable Nagle's algorithm for minimum latency
         _client.ReceiveBufferSize = 65536;
         _client.SendBufferSize = 65536;
+        _client.ReceiveTimeout = 5000;
+        _client.SendTimeout = 5000;
         _stream = _client.GetStream();
     }
 
-    public bool IsConnected => _client.Connected;
+    public bool IsConnected 
+    {
+        get
+        {
+            try
+            {
+                if (_client.Client == null || !_client.Connected)
+                    return false;
+                
+                // Active socket poll check
+                if (_client.Client.Poll(1000, SelectMode.SelectRead))
+                {
+                    // If polled and no data available, connection is dead
+                    if (_client.Client.Available == 0) return false;
+                }
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
 
     public async ValueTask SendAsync(byte[] data, CancellationToken ct = default)
     {

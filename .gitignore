@@ -27,3 +27,9 @@ TestResults/
 *.zip
 .vs/
 .vscode/
+
+# Build artifacts and temp data
+publish/
+build*.ps1
+build*.log
+build*.txt

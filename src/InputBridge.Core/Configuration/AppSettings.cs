@@ -17,9 +17,9 @@ public class NetworkSettings
 
 public class HotkeySettings
 {
-    public string SwitchToHost { get; set; } = "Ctrl+Win+D1";
-    public string SwitchToClient1 { get; set; } = "Ctrl+Win+D2";
-    public string SwitchToClient2 { get; set; } = "Ctrl+Win+D3";
+    public string SwitchToHost { get; set; } = "Ctrl+Win+1";
+    public string SwitchToClient1 { get; set; } = "Ctrl+Win+2";
+    public string SwitchToClient2 { get; set; } = "Ctrl+Win+3";
     public string EmergencyRelease { get; set; } = "Ctrl+Alt+Escape";
 }
 

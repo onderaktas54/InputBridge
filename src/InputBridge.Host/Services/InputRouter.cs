@@ -145,9 +145,14 @@ public sealed class InputRouter : IDisposable
     {
         if (_currentMode == RoutingMode.Remote)
         {
-            SwitchMode(RoutingMode.Local);
+            _currentMode = RoutingMode.Local;
+            _keyboard.SetRemoteMode(false);
+            _mouse.SetRemoteMode(false);
+            ModeChanged?.Invoke(RoutingMode.Local);
         }
         
+        try { _udpTransport?.Dispose(); } catch { }
+        try { _tcpTransport?.Dispose(); } catch { }
         _udpTransport = null;
         _tcpTransport = null;
         _crypto = null;

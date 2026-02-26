@@ -137,7 +137,7 @@ public sealed class ConnectionManager : IDisposable
                 // If loop exits (disconnect), cleanup and loop will repeat (Reconnecting)
                 _router.HandleDisconnect();
                 State = ConnectionState.Reconnecting;
-                await Task.Delay(5000, ct); // Wait before discovering again
+                await Task.Delay(2000, ct); // Wait before discovering again
             }
             catch (OperationCanceledException)
             {
@@ -147,7 +147,7 @@ public sealed class ConnectionManager : IDisposable
             {
                 _router.HandleDisconnect();
                 State = ConnectionState.Reconnecting;
-                try { await Task.Delay(5000, ct); } catch { }
+                try { await Task.Delay(2000, ct); } catch { }
             }
         }
     }
@@ -188,7 +188,7 @@ public sealed class ConnectionManager : IDisposable
         {
             while (!ct.IsCancellationRequested && tcpTransport.IsConnected)
             {
-                if (Volatile.Read(ref missedHeartbeats) >= 3)
+                if (Volatile.Read(ref missedHeartbeats) >= 5)
                 {
                     // Disconnect
                     break;
@@ -206,7 +206,7 @@ public sealed class ConnectionManager : IDisposable
                 await tcpTransport.SendAsync(encData, ct);
                 
                 Interlocked.Increment(ref missedHeartbeats);
-                await Task.Delay(1000, ct);
+                await Task.Delay(2000, ct);
             }
         }
         catch

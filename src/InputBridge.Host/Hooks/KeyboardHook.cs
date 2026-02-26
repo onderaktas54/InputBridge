@@ -42,6 +42,8 @@ public sealed class KeyboardHook : IDisposable
 
     public event Action<InputPacket>? KeyEvent;
 
+    public Func<int, bool>? IsRegisteredHotkey { get; set; }
+
     public KeyboardHook()
     {
         _proc = HookCallback;
@@ -50,6 +52,26 @@ public sealed class KeyboardHook : IDisposable
     public void SetRemoteMode(bool isRemoteMode)
     {
         _isRemoteMode = isRemoteMode;
+        if (!isRemoteMode)
+        {
+            ReleaseModifierKeys();
+        }
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+    
+    private const byte KEYEVENTF_KEYUP = 0x02;
+    private const byte VK_SHIFT_KEY = 0x10;
+    private const byte VK_LWIN_KEY = 0x5B;
+
+    private void ReleaseModifierKeys()
+    {
+        // Release modifier keys that might be stuck
+        keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+        keybd_event((byte)VK_MENU, 0, KEYEVENTF_KEYUP, 0);
+        keybd_event(VK_SHIFT_KEY, 0, KEYEVENTF_KEYUP, 0);
+        keybd_event(VK_LWIN_KEY, 0, KEYEVENTF_KEYUP, 0);
     }
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -75,10 +97,7 @@ public sealed class KeyboardHook : IDisposable
 
                 if (_isRemoteMode)
                 {
-                    bool ctrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-                    bool altDown = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-                    
-                    if (ctrlDown && altDown && (vkCode == 0x31 || vkCode == 0x32 || vkCode == 0x1B))
+                    if (IsRegisteredHotkey != null && IsRegisteredHotkey(vkCode))
                     {
                         // It's a mode switch hotkey, let it pass to the OS HotkeyManager
                         return CallNextHookEx(_hookId, nCode, wParam, lParam);

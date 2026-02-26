@@ -76,6 +76,12 @@ public sealed class MouseSimulator
         }
     }
 
+    public void ResetPosition()
+    {
+        // For client side, we usually don't need to force position for disconnect cleanup unless requested
+        // Or we could move to center if we had screen metrics. For now empty layout or minimal cleanup.
+    }
+
     public void SimulateMouseMove(int deltaX, int deltaY)
     {
         var input = new INPUT
