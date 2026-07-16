@@ -20,6 +20,7 @@ public sealed class HotkeyManager : IDisposable
     private const uint MOD_CONTROL = 0x0002;
     private const uint MOD_SHIFT = 0x0004;
     private const uint MOD_WIN = 0x0008;
+    private const uint MOD_NOREPEAT = 0x4000;
 
     private uint VK_HOST = 0x31; // '1'
     private uint VK_CLIENT = 0x32; // '2'
@@ -53,15 +54,15 @@ public sealed class HotkeyManager : IDisposable
         // Note: For WPF without a specific window, passing IntPtr.Zero registers hotkeys 
         // to the thread. We must intercept them in the application message pump.
 
-        RegisterHotKey(IntPtr.Zero, HOTKEY_ID_HOST, MOD_HOST, VK_HOST);
-        RegisterHotKey(IntPtr.Zero, HOTKEY_ID_CLIENT, MOD_CLIENT, VK_CLIENT);
-        RegisterHotKey(IntPtr.Zero, HOTKEY_ID_EMERGENCY, MOD_EMERGENCY, VK_ESCAPE);
+        RegisterHotKey(IntPtr.Zero, HOTKEY_ID_HOST, MOD_HOST | MOD_NOREPEAT, VK_HOST);
+        RegisterHotKey(IntPtr.Zero, HOTKEY_ID_CLIENT, MOD_CLIENT | MOD_NOREPEAT, VK_CLIENT);
+        RegisterHotKey(IntPtr.Zero, HOTKEY_ID_EMERGENCY, MOD_EMERGENCY | MOD_NOREPEAT, VK_ESCAPE);
 
         ComponentDispatcher.ThreadPreprocessMessage += ComponentDispatcher_ThreadPreprocessMessage;
         _isRegistered = true;
     }
 
-    private void ParseHotkey(string input, out uint modifier, out uint key, uint defaultMod, uint defaultKey)
+    internal static void ParseHotkey(string input, out uint modifier, out uint key, uint defaultMod, uint defaultKey)
     {
         modifier = 0;
         key = 0;
@@ -81,14 +82,17 @@ public sealed class HotkeyManager : IDisposable
             else if (part.Equals("win", StringComparison.OrdinalIgnoreCase)) modifier |= MOD_WIN;
             else
             {
-                // Try parse virtual key
-                if (Enum.TryParse<System.Windows.Forms.Keys>(part, true, out var parsedKey))
+                // Enum.TryParse accepts numeric strings as the enum's underlying value.
+                // For example, "1" becomes VK_LBUTTON (1), not the keyboard's VK_1
+                // (0x31). Resolve one-character keys first so Win+click can never be
+                // mistaken for a configured Win+1 / Win+2 mode shortcut.
+                if (part.Length == 1 && char.IsLetterOrDigit(part[0]))
+                {
+                    key = char.ToUpperInvariant(part[0]);
+                }
+                else if (Enum.TryParse<System.Windows.Forms.Keys>(part, true, out var parsedKey))
                 {
                     key = (uint)parsedKey;
-                }
-                else if (part.Length == 1 && char.IsLetterOrDigit(part[0]))
-                {
-                    key = char.ToUpper(part[0]);
                 }
             }
         }
