@@ -33,6 +33,8 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
+      - name: Test Windows host hotkeys
+        run: dotnet test tests/InputBridge.Host.Tests/InputBridge.Host.Tests.csproj -c Release
       - name: Publish Windows host
         run: dotnet publish src/InputBridge.Host/InputBridge.Host.csproj -c Release -r win-x64 --self-contained
       - name: Publish Windows client

@@ -27,6 +27,9 @@ public sealed class KeyboardHook : IDisposable
 
     private const int VK_CONTROL = 0x11;
     private const int VK_MENU = 0x12; // Alt
+    private const int VK_SHIFT = 0x10;
+    private const int VK_LWIN = 0x5B;
+    private const int VK_RWIN = 0x5C;
 
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
@@ -51,27 +54,40 @@ public sealed class KeyboardHook : IDisposable
 
     public void SetRemoteMode(bool isRemoteMode)
     {
+        if (_isRemoteMode == isRemoteMode) return;
+
+        // A mode hotkey is activated while its modifiers are still physically down.
+        // Once remote mode starts, their real key-up events are intentionally blocked
+        // from the Host. Release the Host-side state explicitly on both transitions so
+        // Ctrl/Alt/Win cannot remain logically stuck and combine with a later click.
+        ReleaseModifierKeys();
         _isRemoteMode = isRemoteMode;
-        if (!isRemoteMode)
-        {
-            ReleaseModifierKeys();
-        }
     }
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
 
     private const byte KEYEVENTF_KEYUP = 0x02;
-    private const byte VK_SHIFT_KEY = 0x10;
-    private const byte VK_LWIN_KEY = 0x5B;
+    private const int RELEASE_EVENT_MARKER = 0x49425247; // "IBRG"
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KeyboardHookData
+    {
+        public uint VkCode;
+        public uint ScanCode;
+        public uint Flags;
+        public uint Time;
+        public UIntPtr ExtraInfo;
+    }
 
     private void ReleaseModifierKeys()
     {
         // Release modifier keys that might be stuck
-        keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-        keybd_event((byte)VK_MENU, 0, KEYEVENTF_KEYUP, 0);
-        keybd_event(VK_SHIFT_KEY, 0, KEYEVENTF_KEYUP, 0);
-        keybd_event(VK_LWIN_KEY, 0, KEYEVENTF_KEYUP, 0);
+        keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, RELEASE_EVENT_MARKER);
+        keybd_event((byte)VK_MENU, 0, KEYEVENTF_KEYUP, RELEASE_EVENT_MARKER);
+        keybd_event((byte)VK_SHIFT, 0, KEYEVENTF_KEYUP, RELEASE_EVENT_MARKER);
+        keybd_event((byte)VK_LWIN, 0, KEYEVENTF_KEYUP, RELEASE_EVENT_MARKER);
+        keybd_event((byte)VK_RWIN, 0, KEYEVENTF_KEYUP, RELEASE_EVENT_MARKER);
     }
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -81,7 +97,16 @@ public sealed class KeyboardHook : IDisposable
             int message = wParam.ToInt32();
             if (message == WM_KEYDOWN || message == WM_KEYUP || message == WM_SYSKEYDOWN || message == WM_SYSKEYUP)
             {
-                var vkCode = Marshal.ReadInt32(lParam);
+                KeyboardHookData hookData = Marshal.PtrToStructure<KeyboardHookData>(lParam);
+
+                // Do not route our own synthetic modifier releases to the Client. They
+                // exist only to repair the Windows Host's key state during mode changes.
+                if (hookData.ExtraInfo.ToUInt64() == RELEASE_EVENT_MARKER)
+                {
+                    return CallNextHookEx(_hookId, nCode, wParam, lParam);
+                }
+
+                int vkCode = unchecked((int)hookData.VkCode);
 
                 var packet = new InputPacket
                 {
