@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputBridge.Shared.UI", "sr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputBridge.Linux", "src\InputBridge.Linux\InputBridge.Linux.csproj", "{77519330-57A1-4649-8F88-455D09787ECC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InputBridge.Linux.Tests", "tests\InputBridge.Linux.Tests\InputBridge.Linux.Tests.csproj", "{D9DB96B7-D488-4705-90CC-56EC0AC504EC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -101,6 +103,18 @@ Global
 		{77519330-57A1-4649-8F88-455D09787ECC}.Release|x64.Build.0 = Release|Any CPU
 		{77519330-57A1-4649-8F88-455D09787ECC}.Release|x86.ActiveCfg = Release|Any CPU
 		{77519330-57A1-4649-8F88-455D09787ECC}.Release|x86.Build.0 = Release|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Debug|x64.Build.0 = Debug|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Debug|x86.Build.0 = Debug|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Release|x64.ActiveCfg = Release|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Release|x64.Build.0 = Release|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Release|x86.ActiveCfg = Release|Any CPU
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -112,5 +126,6 @@ Global
 		{8DA44D38-6058-45D8-84B8-76F7348BDA26} = {647A54AC-10FD-44A6-B9E8-1A0B31A839C9}
 		{A22F2B2F-A592-47C4-AC6D-9DC9F0E95D21} = {647A54AC-10FD-44A6-B9E8-1A0B31A839C9}
 		{77519330-57A1-4649-8F88-455D09787ECC} = {647A54AC-10FD-44A6-B9E8-1A0B31A839C9}
+		{D9DB96B7-D488-4705-90CC-56EC0AC504EC} = {6581FA65-A3D8-48EF-AC5E-9202CB160CA9}
 	EndGlobalSection
 EndGlobal

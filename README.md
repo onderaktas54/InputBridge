@@ -40,7 +40,7 @@
   <img src="docs/images/hero_banner.png" alt="InputBridge — Control multiple PCs with one keyboard and mouse" width="750" />
 </p>
 
-> **Example use case:** You have a work PC and a personal PC on the same desk. Instead of switching between two keyboards, InputBridge lets you press `Ctrl+Win+2` to redirect all your input to the second computer — and `Ctrl+Win+1` to switch back. It's instant, encrypted, and zero-latency on LAN.
+> **Example use case:** You have a work PC and a personal PC on the same desk. Instead of switching between two keyboards, InputBridge lets you press `Ctrl+Win+2` to redirect all your input to the second computer — and `Ctrl+Win+1` to switch back. It's responsive and encrypted on a typical LAN.
 
 ---
 
@@ -55,10 +55,10 @@ It captures/injects input at the kernel layer (**evdev** + **`/dev/uinput`**), s
 under **both X11 and Wayland**.
 
 ```bash
-dotnet build src/InputBridge.Linux/InputBridge.Linux.csproj -c Release
+dotnet publish src/InputBridge.Linux/InputBridge.Linux.csproj -c Release -r linux-x64 --self-contained
 
-sudo ./inputbridge-linux client --secret mypass   # be controlled by a Host
-sudo ./inputbridge-linux host   --secret mypass   # control another machine
+INPUTBRIDGE_SECRET='use-a-long-random-secret' ./inputbridge-linux client   # be controlled by a Host
+INPUTBRIDGE_SECRET='use-a-long-random-secret' ./inputbridge-linux host     # control another machine
 ```
 
 Full guide → **[docs/LINUX.md](docs/LINUX.md)** (hotkeys, udev rule for sudo-less use, interop notes).
@@ -70,7 +70,7 @@ Full guide → **[docs/LINUX.md](docs/LINUX.md)** (hotkeys, udev rule for sudo-l
 | Feature | Description |
 |---|---|
 | ⚡ **Sub-millisecond Latency** | Zero-allocation UDP transport designed for imperceptible input lag on LAN. Keyboard events are sent over TCP to guarantee delivery. |
-| 🔐 **End-to-End Encryption** | All input data is encrypted with **AES-256-GCM** before it leaves your machine. Your keystrokes can never be eavesdropped on the network. |
+| 🔐 **End-to-End Encryption** | Input data is encrypted and authenticated with **AES-256-GCM**. Use a strong, unique shared secret. |
 | 🔍 **Automatic LAN Discovery** | Host broadcasts its presence on the network. The Client discovers it automatically — no need to manually type IP addresses. |
 | 🎯 **Precise Input Simulation** | Uses Windows native `SendInput` API with both Virtual Key codes and Hardware Scan Codes for maximum compatibility, even in games. |
 | 🎨 **Modern Dark UI** | Sleek WPF interface with dark theme, status indicators, and system tray integration. Runs quietly in the background. |
@@ -201,7 +201,7 @@ Follow these steps to get InputBridge running in under 2 minutes:
 </p>
 
 1. Run `InputBridge.Host.exe` on the computer that has the physical keyboard and mouse.
-2. Enter a **Secret Key** — this can be any passphrase (e.g., `mySecureKey123`).
+2. Enter a strong **Secret Key** of at least 16 characters (preferably randomly generated).
 3. Set the **TCP Port** (default `7201` works for most cases).
 4. Click **"Start Connection"**.
 5. The status will show **"Waiting for Connection..."** until the Client connects.
@@ -385,7 +385,8 @@ Contributions are welcome! Here's how you can help:
 
 - [ ] Multi-client support (control 3+ PCs)
 - [ ] Clipboard sharing between Host and Client
-- [ ] Cross-platform Client (Linux/macOS)
+- [x] Cross-platform Client (Linux)
+- [ ] Cross-platform Client (macOS)
 - [ ] File drag & drop between machines
 - [ ] Monitor-edge switching (move mouse to screen edge to switch)
 
@@ -396,7 +397,7 @@ Contributions are welcome! Here's how you can help:
 <details>
 <summary><strong>Is my data safe? Can someone on my network see what I type?</strong></summary>
 <br/>
-No. All keyboard and mouse data is encrypted with <strong>AES-256-GCM</strong> before it leaves your computer. Even if someone captures the network packets, they cannot decrypt the contents without your secret key. Additionally, GCM mode ensures packet integrity — any tampered data is automatically rejected.
+Input packets are encrypted with <strong>AES-256-GCM</strong> and authenticated against tampering. Use a long, unique secret: weak passphrases remain vulnerable to password guessing if an attacker captures the handshake.
 </details>
 
 <details>
@@ -414,7 +415,7 @@ InputBridge is designed for <strong>LAN use only</strong> (same local network). 
 <details>
 <summary><strong>What is the latency?</strong></summary>
 <br/>
-On a typical LAN (Ethernet or Wi-Fi 5/6), latency is <strong>sub-1ms</strong> — completely imperceptible to humans. The compact 24-byte packet format and zero-allocation network stack ensure minimal overhead.
+Latency depends on the network and both computers. The compact packet format is designed to keep LAN overhead low; measure your own Wi-Fi or Ethernet setup for real-world figures.
 </details>
 
 <details>

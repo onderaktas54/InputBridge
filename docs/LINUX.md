@@ -24,31 +24,33 @@ Wayland** — unlike the X11-only `XTEST` approach.
 
 ## Build
 
-Requires the .NET 8 SDK (or newer with roll-forward).
+Release archives are self-contained and do not require a system-wide .NET runtime. To
+build from source, install the .NET 8 SDK or newer.
 
 ```bash
-dotnet build src/InputBridge.Linux/InputBridge.Linux.csproj -c Release
+dotnet publish src/InputBridge.Linux/InputBridge.Linux.csproj -c Release -r linux-x64 --self-contained
 ```
 
-The binary lands at `src/InputBridge.Linux/bin/Release/net8.0/inputbridge-linux`.
+The self-contained binary lands under
+`src/InputBridge.Linux/bin/Release/net8.0/linux-x64/publish/inputbridge-linux`.
 
 > Building the whole `InputBridge.sln` on Linux will fail on the WPF (`net8.0-windows`)
 > projects — that is expected. Build just the `InputBridge.Linux` project on Linux.
 
 ## Run
 
-Both modes need access to kernel input nodes, so either run with `sudo` or install the
-udev rule below.
+Both modes need access to kernel input nodes. Install the udev rule below instead of
+running the network-facing application as root.
 
 ```bash
 # Be controlled by a Host (auto-discovers it on the LAN):
-sudo ./inputbridge-linux client --secret mypass
+INPUTBRIDGE_SECRET='use-a-long-random-secret' ./inputbridge-linux client
 
 # ...or connect straight to a known Host IP:
-sudo ./inputbridge-linux client --host 192.168.1.20 --secret mypass
+INPUTBRIDGE_SECRET='use-a-long-random-secret' ./inputbridge-linux client --host 192.168.1.20
 
 # Control another machine from here:
-sudo ./inputbridge-linux host --secret mypass
+INPUTBRIDGE_SECRET='use-a-long-random-secret' ./inputbridge-linux host
 ```
 
 ### Host hotkeys
@@ -59,7 +61,7 @@ sudo ./inputbridge-linux host --secret mypass
 ### Options
 | Option | Meaning |
 |---|---|
-| `--secret <text>` | Shared secret; **must match** the other side. |
+| `--secret <text>` | Shared secret; must match and be at least 16 characters. Prefer `INPUTBRIDGE_SECRET` so it is not stored in shell history or exposed in the process command line. |
 | `--host <ip>` | (client) Connect directly, skip LAN discovery. |
 | `--port <n>` | TCP port (default `7201`). UDP uses `port-1`. |
 
@@ -75,6 +77,10 @@ sudo modprobe uinput             # ensure the module is loaded
 ```
 
 After that, `./inputbridge-linux client ...` works as your normal user.
+
+Membership in the `input` group permits reading physical input devices and creating
+virtual ones. Only grant it to trusted local users. Use a long, unique shared secret;
+the application intentionally refuses to start with the old public default secret.
 
 ## Interop notes
 - Keyboard events travel over TCP (reliable); mouse movement/scroll over UDP (low latency).

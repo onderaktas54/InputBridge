@@ -28,20 +28,20 @@ try
     switch (options.Mode)
     {
         case AppMode.Client:
-        {
-            using var injector = UinputInjector.Create();
-            var client = new LinuxClient(injector, options.Secret, options.Host, options.Port);
-            Log.Information("InputBridge Linux — CLIENT mode. This machine can be controlled by a Host.");
-            await client.RunAsync(cts.Token);
-            break;
-        }
+            {
+                using var injector = UinputInjector.Create();
+                var client = new LinuxClient(injector, options.Secret, options.Host, options.Port);
+                Log.Information("InputBridge Linux — CLIENT mode. This machine can be controlled by a Host.");
+                await client.RunAsync(cts.Token);
+                break;
+            }
         case AppMode.Host:
-        {
-            var host = new LinuxHost(options.Secret, options.Port);
-            Log.Information("InputBridge Linux — HOST mode. This machine controls a connected client.");
-            await host.RunAsync(cts.Token);
-            break;
-        }
+            {
+                var host = new LinuxHost(options.Secret, options.Port);
+                Log.Information("InputBridge Linux — HOST mode. This machine controls a connected client.");
+                await host.RunAsync(cts.Token);
+                break;
+            }
     }
 }
 catch (InvalidOperationException ex)
@@ -65,7 +65,7 @@ internal enum AppMode { Client, Host }
 internal sealed class CliOptions
 {
     public AppMode Mode { get; private init; }
-    public string Secret { get; private init; } = "default_secret";
+    public string Secret { get; private init; } = "";
     public string? Host { get; private init; }
     public int Port { get; private init; } = 7201;
 
@@ -81,7 +81,7 @@ internal sealed class CliOptions
             default: return null;
         }
 
-        string secret = "default_secret";
+        string? secret = Environment.GetEnvironmentVariable("INPUTBRIDGE_SECRET");
         string? host = null;
         int port = 7201;
 
@@ -96,6 +96,9 @@ internal sealed class CliOptions
                 default: return null;
             }
         }
+
+        if (string.IsNullOrWhiteSpace(secret) || secret.Length < 16 || port is < 2 or > 65535) return null;
+        if (mode == AppMode.Host && host != null) return null;
 
         return new CliOptions { Mode = mode, Secret = secret, Host = host, Port = port };
     }
@@ -114,7 +117,8 @@ internal sealed class CliOptions
               host       Control another machine FROM this one (captures via evdev).
 
             OPTIONS:
-              --secret <text>   Shared secret; must match the other side. Default: "default_secret".
+              --secret <text>   Shared secret; must match the other side. Required unless
+                                INPUTBRIDGE_SECRET is set. Minimum 16 characters.
               --host <ip>       (client) Connect directly to this Host IP, skipping LAN discovery.
               --port <n>        TCP port. Default: 7201.
 
@@ -123,12 +127,12 @@ internal sealed class CliOptions
               Ctrl+Alt+Esc      Emergency release (stop forwarding).
 
             NOTE: Needs access to /dev/uinput (client) or /dev/input/event* (host).
-                  Run with sudo, or install the provided udev rule (see docs/LINUX.md).
+                  Install the provided udev rule instead of running as root (see docs/LINUX.md).
 
             EXAMPLES:
-              sudo ./inputbridge-linux client --secret mypass
-              sudo ./inputbridge-linux client --host 192.168.1.20 --secret mypass
-              sudo ./inputbridge-linux host --secret mypass
+              INPUTBRIDGE_SECRET='use-a-long-random-secret' ./inputbridge-linux client
+              INPUTBRIDGE_SECRET='use-a-long-random-secret' ./inputbridge-linux client --host 192.168.1.20
+              INPUTBRIDGE_SECRET='use-a-long-random-secret' ./inputbridge-linux host
             """);
     }
 }

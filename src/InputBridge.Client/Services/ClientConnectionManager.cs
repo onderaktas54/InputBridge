@@ -2,11 +2,11 @@ using System;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using Serilog;
 using InputBridge.Client.Simulation;
 using InputBridge.Core.Crypto;
 using InputBridge.Core.Network;
 using InputBridge.Core.Protocol;
+using Serilog;
 
 namespace InputBridge.Client.Services;
 
@@ -22,7 +22,7 @@ public enum ConnectionState
 public sealed class ClientConnectionManager : IDisposable
 {
     private ConnectionState _state = ConnectionState.Disconnected;
-    public ConnectionState State 
+    public ConnectionState State
     {
         get => _state;
         private set
@@ -47,7 +47,7 @@ public sealed class ClientConnectionManager : IDisposable
     private CancellationTokenSource? _mainCts;
     private PacketListener? _listener;
 
-    public ClientConnectionManager(KeyboardSimulator keyboard, MouseSimulator mouse, string sharedSecret = "default_secret")
+    public ClientConnectionManager(KeyboardSimulator keyboard, MouseSimulator mouse, string sharedSecret = "")
     {
         _keyboard = keyboard;
         _mouse = mouse;
@@ -59,6 +59,8 @@ public sealed class ClientConnectionManager : IDisposable
     public void Start()
     {
         if (State != ConnectionState.Disconnected && State != ConnectionState.Reconnecting) return;
+        if (SharedSecret.Length < 16)
+            throw new InvalidOperationException("Shared secret must be at least 16 characters.");
         _mainCts = new CancellationTokenSource();
         _ = RunClientLoopAsync(_mainCts.Token);
     }
@@ -80,20 +82,22 @@ public sealed class ClientConnectionManager : IDisposable
             {
                 State = ConnectionState.Discovering;
                 var hosts = await _discovery.ListenForHosts(TimeSpan.FromSeconds(5), ct);
-                
+
                 if (hosts.Count == 0 || ct.IsCancellationRequested) continue;
-                
+
                 var host = hosts[0]; // Connect to the first discovered host
                 State = ConnectionState.Connecting;
 
-                var tcpClient = new TcpClient();
+                using var tcpClient = new TcpClient();
                 await tcpClient.ConnectAsync(host.IpAddress, host.Port, ct);
 
-                var sessionInfo = await _handshake.PerformAsClient(tcpClient, SharedSecret);
+                using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                handshakeCts.CancelAfter(TimeSpan.FromSeconds(5));
+                var sessionInfo = await _handshake.PerformAsClient(tcpClient, SharedSecret, handshakeCts.Token);
                 if (sessionInfo == null)
                 {
                     await Task.Delay(1000, ct);
-                    continue; 
+                    continue;
                 }
 
                 State = ConnectionState.Connected;
@@ -122,9 +126,22 @@ public sealed class ClientConnectionManager : IDisposable
                 State = ConnectionState.Reconnecting;
                 try { await Task.Delay(2000, ct); } catch { }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 break; // Graceful exit
+            }
+            catch (OperationCanceledException)
+            {
+                Log.Warning("[Client] Connection or handshake timed out; retrying.");
+                _listener?.Stop();
+                try { _keyboard.ReleaseAllKeys(); } catch { }
+                try { _keyboard.ReleaseModifierKeys(); } catch { }
+                State = ConnectionState.Reconnecting;
+                try { await Task.Delay(1000, ct); } catch { }
+            }
+            catch (Exception) when (ct.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {

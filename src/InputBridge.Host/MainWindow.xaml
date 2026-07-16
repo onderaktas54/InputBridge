@@ -62,7 +62,7 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="Secret Key:" VerticalAlignment="Center" />
-                <TextBox x:Name="TxtSecret" Grid.Column="1" Text="default_secret" Background="{StaticResource BrushSurface}" Foreground="{StaticResource BrushText}" BorderThickness="0" Padding="5"/>
+                <PasswordBox x:Name="TxtSecret" Grid.Column="1" Background="{StaticResource BrushSurface}" Foreground="{StaticResource BrushText}" BorderThickness="0" Padding="5"/>
             </Grid>
             <StackPanel Orientation="Horizontal" Margin="0,15,0,0" HorizontalAlignment="Center">
                 <Button x:Name="BtnConnect" Content="Start Connection" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Padding="15,8" Margin="0,0,10,0" Click="BtnConnect_Click" />

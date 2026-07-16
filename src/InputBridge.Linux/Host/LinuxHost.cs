@@ -29,10 +29,11 @@ internal sealed class LinuxHost
     private readonly HandshakeManager _handshake = new();
 
     private readonly HashSet<ushort> _pressed = new();
+    private readonly object _pressedLock = new();
     private readonly List<EvdevDevice> _devices = new();
     private Channel<(InputPacket packet, bool udp)>? _outbox;
     private volatile bool _forwarding;
-    private uint _udpSeq;
+    private int _udpSeq;
 
     public LinuxHost(string sharedSecret, int port)
     {
@@ -57,7 +58,18 @@ internal sealed class LinuxHost
                 string clientIp = ((IPEndPoint)client.Client.RemoteEndPoint!).Address.ToString();
                 Log.Information("[Host] Client connected: {Ip}", clientIp);
 
-                var session = await _handshake.PerformAsHost(client, _sharedSecret);
+                using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                handshakeCts.CancelAfter(TimeSpan.FromSeconds(5));
+                SessionInfo? session;
+                try
+                {
+                    session = await _handshake.PerformAsHost(client, _sharedSecret, handshakeCts.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    Log.Warning("[Host] Handshake timed out. Dropping client.");
+                    continue;
+                }
                 if (session == null)
                 {
                     Log.Warning("[Host] Handshake failed (wrong secret?). Dropping client.");
@@ -90,8 +102,18 @@ internal sealed class LinuxHost
         StartCapture();
 
         var sender = SenderLoop(tcp, udp, crypto, sessionCts.Token);
-        var heartbeat = HeartbeatLoop(tcp, crypto, sessionCts.Token);
-        var reader = TcpDrainLoop(tcp, sessionCts.Token);
+        int missedHeartbeats = 0;
+        var heartbeat = HeartbeatLoop(
+            tcp,
+            crypto,
+            () => Interlocked.Increment(ref missedHeartbeats),
+            () => Volatile.Read(ref missedHeartbeats),
+            sessionCts.Token);
+        var reader = TcpDrainLoop(
+            tcp,
+            crypto,
+            () => Interlocked.Exchange(ref missedHeartbeats, 0),
+            sessionCts.Token);
 
         Log.Information("[Host] ✓ Client authenticated. Press Ctrl+Alt+S to start forwarding.");
         await Task.WhenAny(sender, heartbeat, reader);
@@ -99,6 +121,12 @@ internal sealed class LinuxHost
         sessionCts.Cancel();
         StopCapture();
         _outbox.Writer.TryComplete();
+        try
+        {
+            await Task.WhenAll(sender, heartbeat, reader).WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        catch (OperationCanceledException) { }
+        catch (TimeoutException) { }
         Log.Warning("[Host] Client session ended. Waiting for a new client…");
     }
 
@@ -125,7 +153,7 @@ internal sealed class LinuxHost
     {
         foreach (var dev in _devices) dev.Dispose();
         _devices.Clear();
-        _pressed.Clear();
+        lock (_pressedLock) _pressed.Clear();
     }
 
     private void OnDeviceEvent(EvdevDevice dev, EvdevDevice.Event e)
@@ -198,7 +226,7 @@ internal sealed class LinuxHost
 
     private void Enqueue(InputPacket packet, bool udp)
     {
-        if (udp) packet.SequenceNumber = ++_udpSeq;
+        if (udp) packet.SequenceNumber = unchecked((uint)Interlocked.Increment(ref _udpSeq));
         _outbox?.Writer.TryWrite((packet, udp));
     }
 
@@ -208,15 +236,21 @@ internal sealed class LinuxHost
     {
         bool isMod = code is KeyLeftCtrl or KeyRightCtrl or KeyLeftAlt or KeyRightAlt;
         if (!isMod) return;
-        if (value == 1) _pressed.Add(code);
-        else if (value == 0) _pressed.Remove(code);
+        lock (_pressedLock)
+        {
+            if (value == 1) _pressed.Add(code);
+            else if (value == 0) _pressed.Remove(code);
+        }
     }
 
     private bool CtrlAltHeld()
     {
-        bool ctrl = _pressed.Contains(KeyLeftCtrl) || _pressed.Contains(KeyRightCtrl);
-        bool alt = _pressed.Contains(KeyLeftAlt) || _pressed.Contains(KeyRightAlt);
-        return ctrl && alt;
+        lock (_pressedLock)
+        {
+            bool ctrl = _pressed.Contains(KeyLeftCtrl) || _pressed.Contains(KeyRightCtrl);
+            bool alt = _pressed.Contains(KeyLeftAlt) || _pressed.Contains(KeyRightAlt);
+            return ctrl && alt;
+        }
     }
 
     private void ToggleForwarding() => SetForwarding(!_forwarding);
@@ -224,19 +258,25 @@ internal sealed class LinuxHost
     private void SetForwarding(bool on)
     {
         if (_forwarding == on) return;
-        _forwarding = on;
-
-        foreach (var dev in _devices)
-        {
-            if (on) dev.Grab(); else dev.Ungrab();
-        }
 
         if (on)
         {
+            foreach (var dev in _devices)
+            {
+                if (dev.TryGrab()) continue;
+
+                foreach (var grabbed in _devices) grabbed.Ungrab();
+                Log.Error("[Host] Could not exclusively grab {Device}; forwarding stays OFF.", dev.Path);
+                return;
+            }
+
+            _forwarding = true;
             Log.Information("[Host] ▶ Forwarding ON — input now goes to the CLIENT.");
         }
         else
         {
+            _forwarding = false;
+            foreach (var dev in _devices) dev.Ungrab();
             Log.Information("[Host] ⏹ Forwarding OFF — input back on THIS machine.");
             // Tell the client to release everything it is holding.
             Enqueue(Make(InputType.SwitchNotify, 0, 0), udp: false);
@@ -264,13 +304,25 @@ internal sealed class LinuxHost
         catch (Exception ex) { Log.Debug(ex, "[Host] sender stopped"); }
     }
 
-    private async Task HeartbeatLoop(ITransport tcp, AesTransport crypto, CancellationToken ct)
+    private static async Task HeartbeatLoop(
+        ITransport tcp,
+        AesTransport crypto,
+        Action markSent,
+        Func<int> missedCount,
+        CancellationToken ct)
     {
         try
         {
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(1000, ct);
+                markSent();
+                if (missedCount() >= 5)
+                {
+                    Log.Warning("[Host] Five heartbeat replies missed; closing the session.");
+                    return;
+                }
+
                 var hb = Make(InputType.Heartbeat, 0, 0);
                 byte[] payload = crypto.Encrypt(PacketSerializer.Serialize(hb));
                 await tcp.SendAsync(payload, ct);
@@ -280,14 +332,20 @@ internal sealed class LinuxHost
         catch (Exception) { /* peer gone */ }
     }
 
-    private static async Task TcpDrainLoop(ITransport tcp, CancellationToken ct)
+    private static async Task TcpDrainLoop(
+        ITransport tcp,
+        AesTransport crypto,
+        Action heartbeatReceived,
+        CancellationToken ct)
     {
-        // Consume heartbeat echoes; a failed read means the client disconnected.
         try
         {
             while (!ct.IsCancellationRequested && tcp.IsConnected)
             {
-                await tcp.ReceiveAsync(ct);
+                byte[] encrypted = await tcp.ReceiveAsync(ct);
+                byte[] decrypted = crypto.Decrypt(encrypted);
+                InputPacket packet = PacketSerializer.Deserialize(decrypted);
+                if (packet.Type == InputType.Heartbeat) heartbeatReceived();
             }
         }
         catch (OperationCanceledException) { }

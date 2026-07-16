@@ -13,15 +13,44 @@ internal static class KeyMap
     private static readonly Dictionary<int, int> VkToLinux = new()
     {
         // Letters (VK 'A'..'Z')
-        [0x41] = 30, [0x42] = 48, [0x43] = 46, [0x44] = 32, [0x45] = 18, [0x46] = 33,
-        [0x47] = 34, [0x48] = 35, [0x49] = 23, [0x4A] = 36, [0x4B] = 37, [0x4C] = 38,
-        [0x4D] = 50, [0x4E] = 49, [0x4F] = 24, [0x50] = 25, [0x51] = 16, [0x52] = 19,
-        [0x53] = 31, [0x54] = 20, [0x55] = 22, [0x56] = 47, [0x57] = 17, [0x58] = 45,
-        [0x59] = 21, [0x5A] = 44,
+        [0x41] = 30,
+        [0x42] = 48,
+        [0x43] = 46,
+        [0x44] = 32,
+        [0x45] = 18,
+        [0x46] = 33,
+        [0x47] = 34,
+        [0x48] = 35,
+        [0x49] = 23,
+        [0x4A] = 36,
+        [0x4B] = 37,
+        [0x4C] = 38,
+        [0x4D] = 50,
+        [0x4E] = 49,
+        [0x4F] = 24,
+        [0x50] = 25,
+        [0x51] = 16,
+        [0x52] = 19,
+        [0x53] = 31,
+        [0x54] = 20,
+        [0x55] = 22,
+        [0x56] = 47,
+        [0x57] = 17,
+        [0x58] = 45,
+        [0x59] = 21,
+        [0x5A] = 44,
 
         // Digits (VK '0'..'9')
-        [0x30] = 11, [0x31] = 2, [0x32] = 3, [0x33] = 4, [0x34] = 5,
-        [0x35] = 6, [0x36] = 7, [0x37] = 8, [0x38] = 9, [0x39] = 10,
+        [0x30] = 11,
+        [0x31] = 2,
+        [0x32] = 3,
+        [0x33] = 4,
+        [0x34] = 5,
+        [0x35] = 6,
+        [0x36] = 7,
+        [0x37] = 8,
+        [0x38] = 9,
+        [0x39] = 10,
 
         // Whitespace / editing
         [0x0D] = 28,  // Enter
@@ -42,11 +71,24 @@ internal static class KeyMap
         [0x13] = 119, // Pause
 
         // Arrows
-        [0x25] = 105, [0x26] = 103, [0x27] = 106, [0x28] = 108,
+        [0x25] = 105,
+        [0x26] = 103,
+        [0x27] = 106,
+        [0x28] = 108,
 
         // Function keys F1..F12
-        [0x70] = 59, [0x71] = 60, [0x72] = 61, [0x73] = 62, [0x74] = 63, [0x75] = 64,
-        [0x76] = 65, [0x77] = 66, [0x78] = 67, [0x79] = 68, [0x7A] = 87, [0x7B] = 88,
+        [0x70] = 59,
+        [0x71] = 60,
+        [0x72] = 61,
+        [0x73] = 62,
+        [0x74] = 63,
+        [0x75] = 64,
+        [0x76] = 65,
+        [0x77] = 66,
+        [0x78] = 67,
+        [0x79] = 68,
+        [0x7A] = 87,
+        [0x7B] = 88,
 
         // OEM punctuation (US layout positions)
         [0xBA] = 39, // ; :
@@ -60,11 +102,24 @@ internal static class KeyMap
         [0xDC] = 43, // \ |
         [0xDD] = 27, // ] }
         [0xDE] = 40, // ' "
+        [0xE2] = 86, // OEM 102-key key (< > | on ISO/TR layouts)
 
         // Numpad
-        [0x60] = 82, [0x61] = 79, [0x62] = 80, [0x63] = 81, [0x64] = 75, [0x65] = 76,
-        [0x66] = 77, [0x67] = 71, [0x68] = 72, [0x69] = 73,
-        [0x6A] = 55, [0x6B] = 78, [0x6D] = 74, [0x6E] = 83, [0x6F] = 98,
+        [0x60] = 82,
+        [0x61] = 79,
+        [0x62] = 80,
+        [0x63] = 81,
+        [0x64] = 75,
+        [0x65] = 76,
+        [0x66] = 77,
+        [0x67] = 71,
+        [0x68] = 72,
+        [0x69] = 73,
+        [0x6A] = 55,
+        [0x6B] = 78,
+        [0x6D] = 74,
+        [0x6E] = 83,
+        [0x6F] = 98,
 
         // Modifiers — generic (Host may send these) and left/right specific
         [0x10] = 42,  // Shift   -> LeftShift
@@ -78,6 +133,15 @@ internal static class KeyMap
         [0xA5] = 100, // RAlt
         [0x5B] = 125, // LWin -> LeftMeta
         [0x5C] = 126, // RWin -> RightMeta
+
+        // Media keys
+        [0xAD] = 113, // Volume mute
+        [0xAE] = 114, // Volume down
+        [0xAF] = 115, // Volume up
+        [0xB0] = 163, // Next track
+        [0xB1] = 165, // Previous track
+        [0xB2] = 166, // Stop
+        [0xB3] = 164, // Play/pause
     };
 
     // Reverse map (evdev -> VK). Built to prefer left/right-specific virtual keys so a

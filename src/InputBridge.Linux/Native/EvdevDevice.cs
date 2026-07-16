@@ -28,10 +28,12 @@ internal sealed class EvdevDevice : IDisposable
     public void Start() => _thread.Start();
 
     /// <summary>Exclusive-grab the device so events stop reaching local apps while forwarding.</summary>
-    public void Grab()
+    public bool TryGrab()
     {
-        if (_grabbed) return;
-        if (NativeMethods.IoctlInt(_fd, NativeMethods.EVIOCGRAB, 1) == 0) _grabbed = true;
+        if (_grabbed) return true;
+        if (NativeMethods.IoctlInt(_fd, NativeMethods.EVIOCGRAB, 1) != 0) return false;
+        _grabbed = true;
+        return true;
     }
 
     public void Ungrab()

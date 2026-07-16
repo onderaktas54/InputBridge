@@ -183,7 +183,9 @@ internal sealed class UinputInjector : IInputInjector
         WriteU16(ev, 16, type);
         WriteU16(ev, 18, code);
         WriteI32(ev, 20, value);
-        NativeMethods.write(_fd, ev, (nuint)ev.Length);
+        nint written = NativeMethods.write(_fd, ev, (nuint)ev.Length);
+        if (written != ev.Length)
+            throw new InvalidOperationException("Failed to write a complete event to /dev/uinput.");
     }
 
     private void Sync() => Emit(NativeMethods.EV_SYN, NativeMethods.SYN_REPORT, 0);
@@ -205,8 +207,8 @@ internal sealed class UinputInjector : IInputInjector
     public void Dispose()
     {
         if (_disposed) return;
-        _disposed = true;
         try { ReleaseAll(); } catch { /* best effort */ }
+        _disposed = true;
         NativeMethods.IoctlInt(_fd, NativeMethods.UI_DEV_DESTROY, 0);
         NativeMethods.close(_fd);
     }

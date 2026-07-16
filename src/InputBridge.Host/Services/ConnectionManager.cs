@@ -3,11 +3,11 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using Serilog;
 using InputBridge.Core.Crypto;
 using InputBridge.Core.Network;
 using InputBridge.Core.Protocol;
 using InputBridge.Host.Services;
+using Serilog;
 
 namespace InputBridge.Host.Services;
 
@@ -23,7 +23,7 @@ public enum ConnectionState
 public sealed class ConnectionManager : IDisposable
 {
     private ConnectionState _state = ConnectionState.Disconnected;
-    public ConnectionState State 
+    public ConnectionState State
     {
         get => _state;
         private set
@@ -50,7 +50,7 @@ public sealed class ConnectionManager : IDisposable
     private CancellationTokenSource? _mainCts;
     private TcpListener? _tcpListener;
 
-    public ConnectionManager(InputRouter router, string sharedSecret = "default_secret", int tcpPort = 7201, int udpPort = 7200)
+    public ConnectionManager(InputRouter router, string sharedSecret = "", int tcpPort = 7201, int udpPort = 7200)
     {
         _router = router;
         SharedSecret = sharedSecret;
@@ -63,7 +63,9 @@ public sealed class ConnectionManager : IDisposable
     public void Start()
     {
         if (State != ConnectionState.Disconnected) return;
-        
+        if (SharedSecret.Length < 16)
+            throw new InvalidOperationException("Shared secret must be at least 16 characters.");
+
         _mainCts = new CancellationTokenSource();
         _ = RunHostLoopAsync(_mainCts.Token);
     }
@@ -83,7 +85,7 @@ public sealed class ConnectionManager : IDisposable
             {
                 State = ConnectionState.Discovering;
                 using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                
+
                 // 1. Broadcaster (background)
                 var broadcastTask = _discovery.StartBroadcasting(Environment.MachineName, TcpPort, loopCts.Token);
 
@@ -91,16 +93,17 @@ public sealed class ConnectionManager : IDisposable
                 _tcpListener = new TcpListener(IPAddress.Any, TcpPort);
                 _tcpListener.Start();
 
-                TcpClient client;
+                TcpClient acceptedClient;
                 try
                 {
-                    client = await _tcpListener.AcceptTcpClientAsync(loopCts.Token);
+                    acceptedClient = await _tcpListener.AcceptTcpClientAsync(loopCts.Token);
                 }
                 finally
                 {
                     _tcpListener.Stop();
                     loopCts.Cancel(); // Stop broadcasting once a client connects
                 }
+                using TcpClient client = acceptedClient;
 
                 State = ConnectionState.Connecting;
 
@@ -108,14 +111,11 @@ public sealed class ConnectionManager : IDisposable
                 // Set short timeout for handshake
                 using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 handshakeCts.CancelAfter(TimeSpan.FromSeconds(5));
-                
-                // Note: HandshakeManager currently uses synchronous stream operations underneath in our MVP,
-                // but its public interface returns a Task. We rely on the client to cooperate.
-                var sessionInfo = await _handshake.PerformAsHost(client, SharedSecret);
+
+                var sessionInfo = await _handshake.PerformAsHost(client, SharedSecret, handshakeCts.Token);
 
                 if (sessionInfo == null)
                 {
-                    client.Dispose();
                     await Task.Delay(1000, ct); // Wait before retrying
                     continue;
                 }
@@ -124,13 +124,13 @@ public sealed class ConnectionManager : IDisposable
 
                 // 4. Setup Transports
                 var tcpTransport = new TcpTransport(client);
-                
+
                 // For UDP, Host uses local port 0 and sends to ClientIP:UdpPort
                 var clientIpStr = ((IPEndPoint)client.Client.RemoteEndPoint!).Address.ToString();
                 var udpTransport = new UdpTransport(0, clientIpStr, UdpPort);
 
                 var crypto = new AesTransport(sessionInfo.AesKey);
-                
+
                 _router.SetTransports(udpTransport, tcpTransport, crypto);
 
                 // 5. Keep-Alive / Heartbeat loop
@@ -144,7 +144,18 @@ public sealed class ConnectionManager : IDisposable
                 State = ConnectionState.Reconnecting;
                 try { await Task.Delay(2000, ct); } catch { } // Wait before discovering again
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
+            }
             catch (OperationCanceledException)
+            {
+                Log.Warning("[Host] Connection or handshake timed out; waiting for another client.");
+                _router.HandleDisconnect();
+                State = ConnectionState.Reconnecting;
+                try { await Task.Delay(1000, ct); } catch { }
+            }
+            catch (Exception) when (ct.IsCancellationRequested)
             {
                 break;
             }
@@ -166,7 +177,7 @@ public sealed class ConnectionManager : IDisposable
         using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         // Read loop task to catch heartbeat replies
-        var readTask = Task.Run(async () => 
+        var readTask = Task.Run(async () =>
         {
             try
             {
@@ -212,10 +223,10 @@ public sealed class ConnectionManager : IDisposable
 
                 var encData = crypto.Encrypt(PacketSerializer.Serialize(heartbeat));
                 await tcpTransport.SendAsync(encData, ct);
-                
+
                 var currentMissed = Interlocked.Increment(ref missedHeartbeats);
                 Log.Debug("[Host] Heartbeat #{Seq} sent. Missed: {Missed}", heartbeat.SequenceNumber, currentMissed);
-                
+
                 Log.Debug("[Host] TcpTransport.IsConnected = {Status}", tcpTransport.IsConnected);
                 await Task.Delay(2000, ct);
             }

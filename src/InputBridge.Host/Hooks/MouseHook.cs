@@ -115,12 +115,12 @@ public sealed class MouseHook : IDisposable
 
     private void LockCursorToCenter()
     {
-        var rect = new RECT 
-        { 
-            Left = _centerX - 16, 
-            Right = _centerX + 16, 
-            Top = _centerY - 16, 
-            Bottom = _centerY + 16 
+        var rect = new RECT
+        {
+            Left = _centerX - 16,
+            Right = _centerX + 16,
+            Top = _centerY - 16,
+            Bottom = _centerY + 16
         };
         ClipCursor(ref rect);
         SetCursorPos(_centerX, _centerY);
@@ -153,7 +153,7 @@ public sealed class MouseHook : IDisposable
                         _lastX = hookStruct.pt.x;
                         _lastY = hookStruct.pt.y;
                         _isFirstMove = false;
-                        
+
                         // We reset cursor to center to prevent hitting screen edges
                         if (_isRemoteMode) System.Threading.ThreadPool.QueueUserWorkItem(_ => LockCursorToCenter());
                     }
@@ -166,7 +166,7 @@ public sealed class MouseHook : IDisposable
                         if (deltaX != 0 || deltaY != 0)
                         {
                             packet = CreatePacket(InputType.MouseMove, deltaX, deltaY);
-                            
+
                             if (_isRemoteMode)
                             {
                                 // Force center update

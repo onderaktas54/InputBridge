@@ -34,9 +34,9 @@ public sealed class HotkeyManager : IDisposable
     public event Action? EmergencyRelease;
 
     private bool _isRegistered;
-    
+
     // In WPF, we can hook into the thread's message loop if we don't have a specific window handle
-    
+
     public void ReRegister(string hostKey, string clientKey, string emergencyKey)
     {
         Unregister();
@@ -52,7 +52,7 @@ public sealed class HotkeyManager : IDisposable
 
         // Note: For WPF without a specific window, passing IntPtr.Zero registers hotkeys 
         // to the thread. We must intercept them in the application message pump.
-        
+
         RegisterHotKey(IntPtr.Zero, HOTKEY_ID_HOST, MOD_HOST, VK_HOST);
         RegisterHotKey(IntPtr.Zero, HOTKEY_ID_CLIENT, MOD_CLIENT, VK_CLIENT);
         RegisterHotKey(IntPtr.Zero, HOTKEY_ID_EMERGENCY, MOD_EMERGENCY, VK_ESCAPE);

@@ -21,7 +21,7 @@ internal sealed class LinuxClient
     private readonly int _manualPort;
     private readonly DiscoveryService _discovery = new();
     private readonly HandshakeManager _handshake = new();
-    private uint _lastUdpSeq;
+    private readonly UdpSequenceTracker _udpSequence = new();
 
     public LinuxClient(IInputInjector injector, string sharedSecret, string? manualHost, int manualPort)
     {
@@ -48,7 +48,9 @@ internal sealed class LinuxClient
                 using var tcpClient = new TcpClient();
                 await tcpClient.ConnectAsync(ip, port, ct);
 
-                var session = await _handshake.PerformAsClient(tcpClient, _sharedSecret);
+                using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                handshakeCts.CancelAfter(TimeSpan.FromSeconds(5));
+                var session = await _handshake.PerformAsClient(tcpClient, _sharedSecret, handshakeCts.Token);
                 if (session == null)
                 {
                     Log.Warning("[Client] Handshake failed (wrong secret?). Retrying…");
@@ -61,6 +63,7 @@ internal sealed class LinuxClient
                 using var tcp = new TcpTransport(tcpClient);
                 using var udp = new UdpTransport(port - 1, ip, port - 1);
                 using var crypto = new AesTransport(session.AesKey);
+                _udpSequence.Reset();
 
                 using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 var udpTask = ListenLoop(udp, crypto, isUdp: true, loopCts.Token);
@@ -68,13 +71,25 @@ internal sealed class LinuxClient
 
                 await Task.WhenAny(udpTask, tcpTask);
                 loopCts.Cancel();
+                try
+                {
+                    await Task.WhenAll(udpTask, tcpTask).WaitAsync(TimeSpan.FromSeconds(2));
+                }
+                catch (OperationCanceledException) { }
+                catch (TimeoutException) { }
                 _injector.ReleaseAll();
                 Log.Warning("[Client] ⚠ Connection lost — reconnecting…");
                 await Task.Delay(1500, ct);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 break;
+            }
+            catch (OperationCanceledException)
+            {
+                Log.Warning("[Client] Connection or handshake timed out; retrying…");
+                _injector.ReleaseAll();
+                await SafeDelay(1000, ct);
             }
             catch (Exception ex)
             {
@@ -113,8 +128,7 @@ internal sealed class LinuxClient
 
                 if (isUdp)
                 {
-                    if (packet.SequenceNumber <= _lastUdpSeq && packet.SequenceNumber != 0) continue;
-                    _lastUdpSeq = packet.SequenceNumber;
+                    if (!_udpSequence.ShouldAccept(packet.SequenceNumber)) continue;
                 }
                 else if (packet.Type == InputType.Heartbeat)
                 {

@@ -22,7 +22,7 @@ public sealed class AesTransport : IDisposable
     {
         // Allocate space for [12-byte IV] + [ciphertext] + [16-byte tag]
         byte[] payload = new byte[12 + plaintext.Length + 16];
-        
+
         Span<byte> iv = payload.AsSpan(0, 12);
         Span<byte> ciphertext = payload.AsSpan(12, plaintext.Length);
         Span<byte> tag = payload.AsSpan(12 + plaintext.Length, 16);
@@ -48,7 +48,7 @@ public sealed class AesTransport : IDisposable
         ReadOnlySpan<byte> tag = encrypted.Slice(encrypted.Length - 16, 16);
 
         byte[] plaintext = new byte[ciphertext.Length];
-        
+
         // Decrypt will throw CryptographicException if the tag doesn't match
         _aesGcm.Decrypt(iv, ciphertext, tag, plaintext);
 
