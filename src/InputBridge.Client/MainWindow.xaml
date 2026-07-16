@@ -1,40 +1,163 @@
 ﻿<Window x:Class="InputBridge.Client.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="InputBridge Client" Height="400" Width="400"
+        Title="InputBridge · Windows Client"
+        Width="820" Height="560" MinWidth="760" MinHeight="520"
         Style="{StaticResource DefaultWindowStyle}"
         WindowStartupLocation="CenterScreen">
-    <Grid Margin="15">
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Status Panel -->
-        <Border Grid.Row="0" Background="{StaticResource BrushSurface}" CornerRadius="8" Padding="15" Margin="0,0,0,20">
-            <StackPanel>
-                <TextBlock Text="🔴 Waiting for Connection..." Foreground="{StaticResource BrushError}" FontWeight="Bold" FontSize="16" x:Name="TxtStatus" />
-                <TextBlock Text="Listening Port: 7201 (TCP/UDP)" Foreground="{StaticResource BrushTextDim}" Margin="0,5,0,0" x:Name="TxtDetails" />
-            </StackPanel>
+        <Border Grid.Row="0"
+                Background="{StaticResource BrushHeader}"
+                BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="0,0,0,1"
+                Padding="26,20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Width="52" Height="52" CornerRadius="14"
+                        Background="{StaticResource BrushBrandGradient}">
+                    <TextBlock Text="⌁" FontSize="34" FontWeight="Bold"
+                               Foreground="White" HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+
+                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                    <TextBlock Text="InputBridge" FontSize="26" FontWeight="Bold"
+                               Foreground="{StaticResource BrushText}" />
+                    <TextBlock Text="WINDOWS CLIENT · SECURE INPUT RECEIVER"
+                               FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource BrushPrimary}" />
+                </StackPanel>
+
+                <Border Grid.Column="3" CornerRadius="14" Padding="13,7"
+                        Background="#112B2A" BorderBrush="#1F6B60"
+                        BorderThickness="1" VerticalAlignment="Center">
+                    <TextBlock Text="●  AES-256-GCM" Foreground="#6EE7C7"
+                               FontSize="11" FontWeight="SemiBold" />
+                </Border>
+            </Grid>
         </Border>
 
-        <TextBlock Grid.Row="1" Text="— Connection Settings —" Foreground="{StaticResource BrushTextDim}" Margin="0,0,0,10" />
-        <StackPanel Grid.Row="2" Margin="0,0,0,20">
-            <Grid Margin="0,0,0,5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="100"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="Secret Key:" VerticalAlignment="Center" />
-                <PasswordBox x:Name="TxtSecret" Grid.Column="1" Background="{StaticResource BrushSurface}" Foreground="{StaticResource BrushText}" BorderThickness="0" Padding="5"/>
-            </Grid>
-            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
-                <Button x:Name="BtnConnect" Content="Connect" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Padding="15,8" Margin="0,0,10,0" Click="BtnConnect_Click" />
-                <Button x:Name="BtnHide" Content="Hide" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left" Padding="15,8" Margin="0,0,10,0" Click="BtnHide_Click" />
-                <Button x:Name="BtnExit" Content="Exit" Background="{StaticResource BrushError}" HorizontalAlignment="Left" Padding="15,8" Click="BtnExit_Click" />
-            </StackPanel>
-        </StackPanel>
+        <Grid Grid.Row="1" Margin="26,22">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.05*" />
+                <ColumnDefinition Width="20" />
+                <ColumnDefinition Width="0.95*" />
+            </Grid.ColumnDefinitions>
 
+            <StackPanel Grid.Column="0">
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,18">
+                    <StackPanel>
+                        <TextBlock Text="DURUM" Style="{StaticResource SectionLabelStyle}"
+                                   Margin="0,0,0,14" />
+                        <TextBlock x:Name="TxtStatus"
+                                   Text="🔴 Bağlantı kapalı"
+                                   Foreground="{StaticResource BrushError}"
+                                   FontWeight="SemiBold" FontSize="21" />
+                        <TextBlock x:Name="TxtDetails"
+                                   Text="Windows/Linux Host bekleniyor"
+                                   Foreground="{StaticResource BrushTextDim}"
+                                   FontSize="13" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="BU CİHAZ"
+                                   Style="{StaticResource SectionLabelStyle}"
+                                   Margin="0,0,0,14" />
+                        <Border Height="142" CornerRadius="12"
+                                Background="#0A1422"
+                                BorderBrush="{StaticResource BrushBorder}"
+                                BorderThickness="1">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="▣" FontSize="34"
+                                           Foreground="{StaticResource BrushViolet}"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Text="Güvenli giriş alıcısı"
+                                           Foreground="{StaticResource BrushText}"
+                                           FontSize="16" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,7,0,0" />
+                                <TextBlock Text="Klavye ve fare olayları yerel giriş olarak uygulanır"
+                                           Foreground="{StaticResource BrushTextDim}"
+                                           FontSize="12" TextAlignment="Center"
+                                           TextWrapping="Wrap" Margin="20,5,20,0" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,18">
+                    <StackPanel>
+                        <TextBlock Text="BAĞLANTI"
+                                   Style="{StaticResource SectionLabelStyle}"
+                                   Margin="0,0,0,16" />
+
+                        <TextBlock Text="SECRET KEY"
+                                   Style="{StaticResource FieldLabelStyle}" />
+                        <PasswordBox x:Name="TxtSecret"
+                                     Style="{StaticResource InputPasswordBoxStyle}"
+                                     Margin="0,0,0,18" />
+
+                        <Button x:Name="BtnConnect"
+                                Content="Host'u bul ve bağlan"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Click="BtnConnect_Click"
+                                Margin="0,0,0,10" />
+                        <Button x:Name="BtnHide"
+                                Content="Arka plana al"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Click="BtnHide_Click"
+                                Margin="0,0,0,10" />
+                        <Button x:Name="BtnExit"
+                                Content="Uygulamadan çık"
+                                Style="{StaticResource DangerButtonStyle}"
+                                Click="BtnExit_Click" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}" Padding="18">
+                    <StackPanel>
+                        <TextBlock Text="NASIL ÇALIŞIR?"
+                                   Style="{StaticResource SectionLabelStyle}"
+                                   Margin="0,0,0,11" />
+                        <TextBlock Text="Aynı yerel ağdaki Host otomatik bulunur. Secret Key eşleştiğinde bağlantı doğrulanır ve giriş paketleri şifreli olarak alınır."
+                                   Foreground="{StaticResource BrushTextDim}"
+                                   FontSize="12" TextWrapping="Wrap"
+                                   LineHeight="19" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Background="{StaticResource BrushHeader}"
+                BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="0,1,0,0"
+                Padding="26,13">
+            <Grid>
+                <TextBlock Text="●  Otomatik LAN keşfi · Güvenli yeniden bağlanma"
+                           Foreground="{StaticResource BrushTextDim}"
+                           FontSize="11" />
+                <TextBlock Text="InputBridge Windows · Client"
+                           Foreground="{StaticResource BrushTextDim}"
+                           FontSize="11" HorizontalAlignment="Right" />
+            </Grid>
+        </Border>
     </Grid>
 </Window>

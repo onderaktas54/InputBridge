@@ -7,7 +7,7 @@ namespace InputBridge.Core.Configuration;
 
 public class NetworkSettings
 {
-    public int HostPort { get; set; } = 7200;
+    public int HostPort { get; set; } = 7201;
     public int DiscoveryPort { get; set; } = 7202;
     public int HeartbeatIntervalMs { get; set; } = 1000;
     public int ReconnectDelayMs { get; set; } = 5000;

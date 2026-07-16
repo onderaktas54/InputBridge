@@ -5,6 +5,7 @@ using InputBridge.Client.Simulation;
 using InputBridge.Core.Crypto;
 using InputBridge.Core.Network;
 using InputBridge.Core.Protocol;
+using Serilog;
 
 namespace InputBridge.Client.Services;
 
@@ -54,9 +55,9 @@ public sealed class PacketListener : IDisposable
 
     private async Task UdpListenLoop(CancellationToken ct)
     {
-        try
+        while (!ct.IsCancellationRequested && _udpTransport.IsConnected)
         {
-            while (!ct.IsCancellationRequested && _udpTransport.IsConnected)
+            try
             {
                 var encrypted = await _udpTransport.ReceiveAsync(ct);
                 var decrypted = _crypto.Decrypt(encrypted);
@@ -70,11 +71,18 @@ public sealed class PacketListener : IDisposable
 
                 DispatchPacket(packet);
             }
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception)
-        {
-            // UDP error
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                // UDP is best-effort. A late packet from the previous session or one
+                // malformed datagram must not permanently stop mouse input reception.
+                Log.Debug(ex, "[Client] Ignoring invalid/transient UDP datagram.");
+                try { await Task.Delay(25, ct); }
+                catch (OperationCanceledException) { return; }
+            }
         }
     }
 
@@ -94,7 +102,7 @@ public sealed class PacketListener : IDisposable
                 {
                     // Echo back the heartbeat over TCP
                     var replyEncrypted = _crypto.Encrypt(PacketSerializer.Serialize(packet));
-                    _ = _tcpTransport.SendAsync(replyEncrypted, ct);
+                    await _tcpTransport.SendAsync(replyEncrypted, ct);
                 }
                 else
                 {

@@ -34,11 +34,16 @@ internal sealed class LinuxHost
     private Channel<(InputPacket packet, bool udp)>? _outbox;
     private volatile bool _forwarding;
     private int _udpSeq;
+    private readonly Action<LinuxConnectionStatus, string>? _statusChanged;
 
-    public LinuxHost(string sharedSecret, int port)
+    public LinuxHost(
+        string sharedSecret,
+        int port,
+        Action<LinuxConnectionStatus, string>? statusChanged = null)
     {
         _sharedSecret = sharedSecret;
         _port = port;
+        _statusChanged = statusChanged;
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -47,6 +52,7 @@ internal sealed class LinuxHost
 
         var listener = new TcpListener(IPAddress.Any, _port);
         listener.Start();
+        Report(LinuxConnectionStatus.Waiting, $"Client bekleniyor · TCP {_port}");
         Log.Information("[Host] Listening on port {Port}. Waiting for a client…", _port);
         Log.Information("[Host] Toggle forwarding: Ctrl+Alt+S   |   Emergency release: Ctrl+Alt+Esc");
 
@@ -56,6 +62,7 @@ internal sealed class LinuxHost
             {
                 using TcpClient client = await listener.AcceptTcpClientAsync(ct);
                 string clientIp = ((IPEndPoint)client.Client.RemoteEndPoint!).Address.ToString();
+                Report(LinuxConnectionStatus.Connecting, $"{clientIp} kimliği doğrulanıyor…");
                 Log.Information("[Host] Client connected: {Ip}", clientIp);
 
                 using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -67,11 +74,13 @@ internal sealed class LinuxHost
                 }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
+                    Report(LinuxConnectionStatus.Reconnecting, "Kimlik doğrulama zaman aşımına uğradı.");
                     Log.Warning("[Host] Handshake timed out. Dropping client.");
                     continue;
                 }
                 if (session == null)
                 {
+                    Report(LinuxConnectionStatus.Error, "Kimlik doğrulama başarısız. Secret Key eşleşmiyor olabilir.");
                     Log.Warning("[Host] Handshake failed (wrong secret?). Dropping client.");
                     continue;
                 }
@@ -84,6 +93,7 @@ internal sealed class LinuxHost
         {
             listener.Stop();
             StopCapture();
+            Report(LinuxConnectionStatus.Stopped, "Host durduruldu.");
         }
     }
 
@@ -116,6 +126,7 @@ internal sealed class LinuxHost
             sessionCts.Token);
 
         Log.Information("[Host] ✓ Client authenticated. Press Ctrl+Alt+S to start forwarding.");
+        Report(LinuxConnectionStatus.Connected, $"{clientIp} bağlandı · Ctrl+Alt+S ile yönlendir");
         await Task.WhenAny(sender, heartbeat, reader);
 
         sessionCts.Cancel();
@@ -128,6 +139,7 @@ internal sealed class LinuxHost
         catch (OperationCanceledException) { }
         catch (TimeoutException) { }
         Log.Warning("[Host] Client session ended. Waiting for a new client…");
+        Report(LinuxConnectionStatus.Waiting, $"Client bekleniyor · TCP {_port}");
     }
 
     // ---- capture ----
@@ -282,6 +294,9 @@ internal sealed class LinuxHost
             Enqueue(Make(InputType.SwitchNotify, 0, 0), udp: false);
         }
     }
+
+    private void Report(LinuxConnectionStatus status, string message) =>
+        _statusChanged?.Invoke(status, message);
 
     // ---- network loops ----
 

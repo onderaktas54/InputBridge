@@ -23,7 +23,8 @@ jobs:
           -o publish/linux
       - name: Add documentation and package
         run: |
-          cp docs/LINUX.md packaging/99-inputbridge.rules publish/linux/
+          cp docs/LINUX.md packaging/99-inputbridge.rules packaging/inputbridge.desktop publish/linux/
+          cp docs/images/logo.png publish/linux/inputbridge.png
           tar -C publish/linux -czf "InputBridge_Linux_x64_${{ github.ref_name }}.tar.gz" .
       - uses: actions/upload-artifact@v7
         with:

@@ -1,4 +1,7 @@
 using FluentAssertions;
+using InputBridge.Core.Crypto;
+using InputBridge.Core.Network;
+using InputBridge.Core.Protocol;
 using InputBridge.Linux.Client;
 using Xunit;
 
@@ -62,5 +65,65 @@ public sealed class LinuxBehaviorTests
     {
         KeyMap.VkToEvdev(virtualKey).Should().Be(evdevCode);
         KeyMap.EvdevToVk(evdevCode).Should().Be(virtualKey);
+    }
+
+    [Fact]
+    public async Task UdpReceiveLoop_ShouldIgnoreInvalidDatagramAndKeepSessionAlive()
+    {
+        byte[] key = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray();
+        using var crypto = new AesTransport(key);
+        var packet = new InputPacket
+        {
+            Version = 1,
+            Type = InputType.MouseMove,
+            Data1 = 12,
+            Data2 = -4,
+            SequenceNumber = 1,
+        };
+
+        byte[] valid = crypto.Encrypt(PacketSerializer.Serialize(packet));
+        using var transport = new ScriptedTransport([new byte[] { 1, 2, 3 }, valid]);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        InputPacket? received = null;
+
+        await PacketReceiveLoop.RunAsync(
+            transport,
+            crypto,
+            isUdp: true,
+            new UdpSequenceTracker(),
+            value =>
+            {
+                received = value;
+                cts.Cancel();
+            },
+            cts.Token);
+
+        received.Should().NotBeNull();
+        received!.Value.Type.Should().Be(InputType.MouseMove);
+        received.Value.Data1.Should().Be(12);
+        transport.ReceiveCount.Should().BeGreaterThanOrEqualTo(2);
+    }
+
+    private sealed class ScriptedTransport(IEnumerable<byte[]> packets) : ITransport
+    {
+        private readonly Queue<byte[]> _packets = new(packets);
+
+        public int ReceiveCount { get; private set; }
+        public bool IsConnected => true;
+
+        public ValueTask SendAsync(byte[] data, CancellationToken ct = default) =>
+            ValueTask.CompletedTask;
+
+        public async ValueTask<byte[]> ReceiveAsync(CancellationToken ct = default)
+        {
+            ReceiveCount++;
+            if (_packets.Count > 0) return _packets.Dequeue();
+            await Task.Delay(Timeout.Infinite, ct);
+            return [];
+        }
+
+        public void Dispose()
+        {
+        }
     }
 }

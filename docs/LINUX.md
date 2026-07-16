@@ -1,6 +1,6 @@
 # InputBridge on Linux 🐧
 
-`InputBridge.Linux` is a headless (console) edition that brings InputBridge to Linux.
+`InputBridge.Linux` is a desktop application with an optional headless CLI that brings InputBridge to Linux.
 It **reuses the exact same `InputBridge.Core`** networking, discovery, handshake and
 AES-256-GCM encryption as the Windows apps, so a Linux machine interoperates with a
 Windows Host/Client over the identical protocol.
@@ -41,6 +41,19 @@ The self-contained binary lands under
 
 Both modes need access to kernel input nodes. Install the udev rule below instead of
 running the network-facing application as root.
+
+Launch the desktop interface by opening `inputbridge-linux`, or from a terminal:
+
+```bash
+./inputbridge-linux
+```
+
+Choose **Client** when this Linux machine will be controlled by the keyboard and mouse
+attached to another computer. Choose **Host** when this machine has the keyboard and
+mouse that will control a Client. Enter the same secret on both computers; the Client
+can discover the Host automatically or connect to a specific IP address.
+
+For a terminal-only session:
 
 ```bash
 # Be controlled by a Host (auto-discovers it on the LAN):
@@ -84,6 +97,8 @@ the application intentionally refuses to start with the old public default secre
 
 ## Interop notes
 - Keyboard events travel over TCP (reliable); mouse movement/scroll over UDP (low latency).
+- TCP heartbeats determine connection health. Invalid, late or stale UDP datagrams are
+  ignored and never tear down an otherwise healthy session.
 - Windows Virtual-Key codes on the wire are mapped to/from Linux evdev key codes
   (`KeyMap.cs`). The mapping targets a US layout; non-US layouts may need additions.
 - On a **single machine** you cannot run host and client together (both bind UDP

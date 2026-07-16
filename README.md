@@ -68,7 +68,7 @@
 | Platform | Host — controls another PC | Client — is controlled remotely | Interface |
 |---|:---:|:---:|---|
 | **Windows 10/11 x64** | ✅ | ✅ | WPF desktop app + system tray |
-| **Linux x64** | ✅ | ✅ | Headless CLI |
+| **Linux x64** | ✅ | ✅ | Desktop app + CLI |
 | **Linux display server** | X11 / Wayland | X11 / Wayland | evdev + uinput |
 | **macOS** | ❌ | ❌ | Planned |
 
@@ -114,6 +114,12 @@ Release archives are self-contained. You do not need to install .NET separately.
 <summary><strong>Linux as the Client</strong></summary>
 <br>
 
+Open <strong>inputbridge-linux</strong>, select <strong>Client</strong>, enter the same
+secret and click <strong>Find Host and connect</strong>. The app can discover the Host,
+or you can enter its IP address yourself.
+
+The headless CLI remains available for servers and scripts:
+
 ~~~bash
 INPUTBRIDGE_SECRET='use-a-long-random-secret' ./inputbridge-linux client
 
@@ -127,6 +133,9 @@ INPUTBRIDGE_SECRET='use-a-long-random-secret' \
 <details>
 <summary><strong>Linux as the Host</strong></summary>
 <br>
+
+Open <strong>inputbridge-linux</strong>, select <strong>Host</strong>, enter the shared
+secret and start it. For a headless session, use:
 
 ~~~bash
 INPUTBRIDGE_SECRET='use-a-long-random-secret' ./inputbridge-linux host
@@ -175,7 +184,7 @@ The shared Core library owns discovery, networking, packet serialization, the ha
 |---|---|---|
 | Keyboard | TCP | Preserve every key-down and key-up event |
 | Mouse | UDP | Prioritize fresh movement with minimal delay |
-| Heartbeat | UDP | Detect a lost peer and release held input |
+| Heartbeat | TCP | Detect a lost peer and release held input |
 | Handshake | TCP | Authenticate the shared secret and establish the session |
 
 <a id="security"></a>
@@ -225,7 +234,7 @@ src/
 ├── InputBridge.Core/       Networking, protocol, discovery and crypto
 ├── InputBridge.Host/       Windows input capture and routing
 ├── InputBridge.Client/     Windows input replay
-├── InputBridge.Linux/      Linux Host and Client CLI
+├── InputBridge.Linux/      Linux Host/Client desktop app and CLI
 └── InputBridge.Shared.UI/  Shared WPF theme and tray services
 
 tests/

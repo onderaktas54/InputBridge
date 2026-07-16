@@ -22,13 +22,20 @@ internal sealed class LinuxClient
     private readonly DiscoveryService _discovery = new();
     private readonly HandshakeManager _handshake = new();
     private readonly UdpSequenceTracker _udpSequence = new();
+    private readonly Action<LinuxConnectionStatus, string>? _statusChanged;
 
-    public LinuxClient(IInputInjector injector, string sharedSecret, string? manualHost, int manualPort)
+    public LinuxClient(
+        IInputInjector injector,
+        string sharedSecret,
+        string? manualHost,
+        int manualPort,
+        Action<LinuxConnectionStatus, string>? statusChanged = null)
     {
         _injector = injector;
         _sharedSecret = sharedSecret;
         _manualHost = manualHost;
         _manualPort = manualPort;
+        _statusChanged = statusChanged;
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -40,10 +47,12 @@ internal sealed class LinuxClient
                 var (ip, port) = await ResolveHostAsync(ct);
                 if (ip == null)
                 {
+                    Report(LinuxConnectionStatus.Discovering, "Host bulunamadı; yerel ağ yeniden taranıyor…");
                     Log.Information("[Client] No host found, retrying…");
                     continue;
                 }
 
+                Report(LinuxConnectionStatus.Connecting, $"{ip}:{port} adresine bağlanılıyor…");
                 Log.Information("[Client] Connecting to {Ip}:{Port}", ip, port);
                 using var tcpClient = new TcpClient();
                 await tcpClient.ConnectAsync(ip, port, ct);
@@ -53,11 +62,13 @@ internal sealed class LinuxClient
                 var session = await _handshake.PerformAsClient(tcpClient, _sharedSecret, handshakeCts.Token);
                 if (session == null)
                 {
+                    Report(LinuxConnectionStatus.Error, "Kimlik doğrulama başarısız. Secret Key eşleşmiyor olabilir.");
                     Log.Warning("[Client] Handshake failed (wrong secret?). Retrying…");
                     await Task.Delay(1000, ct);
                     continue;
                 }
 
+                Report(LinuxConnectionStatus.Connected, $"{session.RemoteHostname} cihazına güvenli bağlantı kuruldu.");
                 Log.Information("[Client] ✓ Connected & authenticated to {Host}", session.RemoteHostname);
 
                 using var tcp = new TcpTransport(tcpClient);
@@ -66,10 +77,24 @@ internal sealed class LinuxClient
                 _udpSequence.Reset();
 
                 using var loopCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                var udpTask = ListenLoop(udp, crypto, isUdp: true, loopCts.Token);
-                var tcpTask = ListenLoop(tcp, crypto, isUdp: false, loopCts.Token);
+                var udpTask = PacketReceiveLoop.RunAsync(
+                    udp,
+                    crypto,
+                    isUdp: true,
+                    _udpSequence,
+                    Dispatch,
+                    loopCts.Token);
+                var tcpTask = PacketReceiveLoop.RunAsync(
+                    tcp,
+                    crypto,
+                    isUdp: false,
+                    _udpSequence,
+                    Dispatch,
+                    loopCts.Token);
 
-                await Task.WhenAny(udpTask, tcpTask);
+                // TCP carries the heartbeat and defines session health. UDP is deliberately
+                // best-effort; a transient UDP receive/decrypt error must not end the session.
+                await tcpTask;
                 loopCts.Cancel();
                 try
                 {
@@ -78,6 +103,7 @@ internal sealed class LinuxClient
                 catch (OperationCanceledException) { }
                 catch (TimeoutException) { }
                 _injector.ReleaseAll();
+                Report(LinuxConnectionStatus.Reconnecting, "Bağlantı kesildi; yeniden deneniyor…");
                 Log.Warning("[Client] ⚠ Connection lost — reconnecting…");
                 await Task.Delay(1500, ct);
             }
@@ -87,12 +113,14 @@ internal sealed class LinuxClient
             }
             catch (OperationCanceledException)
             {
+                Report(LinuxConnectionStatus.Reconnecting, "Bağlantı zaman aşımına uğradı; yeniden deneniyor…");
                 Log.Warning("[Client] Connection or handshake timed out; retrying…");
                 _injector.ReleaseAll();
                 await SafeDelay(1000, ct);
             }
             catch (Exception ex)
             {
+                Report(LinuxConnectionStatus.Error, ex.Message);
                 Log.Error(ex, "[Client] loop error");
                 _injector.ReleaseAll();
                 await SafeDelay(2000, ct);
@@ -100,6 +128,7 @@ internal sealed class LinuxClient
         }
 
         _injector.ReleaseAll();
+        Report(LinuxConnectionStatus.Stopped, "Client durduruldu.");
     }
 
     private async Task<(string? ip, int port)> ResolveHostAsync(CancellationToken ct)
@@ -109,40 +138,12 @@ internal sealed class LinuxClient
             return (_manualHost, _manualPort);
         }
 
+        Report(LinuxConnectionStatus.Discovering, "Yerel ağda Windows/Linux Host aranıyor…");
         Log.Information("[Client] Discovering hosts on the LAN…");
         var hosts = await _discovery.ListenForHosts(TimeSpan.FromSeconds(5), ct);
         if (hosts.Count == 0) return (null, 0);
         var host = hosts[0];
         return (host.IpAddress, host.Port);
-    }
-
-    private async Task ListenLoop(ITransport transport, AesTransport crypto, bool isUdp, CancellationToken ct)
-    {
-        try
-        {
-            while (!ct.IsCancellationRequested && transport.IsConnected)
-            {
-                byte[] encrypted = await transport.ReceiveAsync(ct);
-                byte[] decrypted = crypto.Decrypt(encrypted);
-                InputPacket packet = PacketSerializer.Deserialize(decrypted);
-
-                if (isUdp)
-                {
-                    if (!_udpSequence.ShouldAccept(packet.SequenceNumber)) continue;
-                }
-                else if (packet.Type == InputType.Heartbeat)
-                {
-                    // Echo heartbeats back so the Host can measure latency / liveness.
-                    byte[] reply = crypto.Encrypt(PacketSerializer.Serialize(packet));
-                    await transport.SendAsync(reply, ct);
-                    continue;
-                }
-
-                Dispatch(packet);
-            }
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception) { /* transport dropped — RunAsync reconnects */ }
     }
 
     private void Dispatch(InputPacket packet)
@@ -165,4 +166,7 @@ internal sealed class LinuxClient
     {
         try { await Task.Delay(ms, ct); } catch (OperationCanceledException) { }
     }
+
+    private void Report(LinuxConnectionStatus status, string message) =>
+        _statusChanged?.Invoke(status, message);
 }

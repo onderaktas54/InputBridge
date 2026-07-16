@@ -133,30 +133,30 @@ public partial class MainWindow : Window
             switch (state)
             {
                 case ConnectionState.Disconnected:
-                    TxtStatus.Text = "🔴 Disconnected";
+                    TxtStatus.Text = "🔴 Bağlantı kapalı";
                     TxtStatus.Foreground = (SolidColorBrush)FindResource("BrushError");
                     _trayService.UpdateState(TrayIconState.Disconnected, "Host - Disconnected");
                     BtnRemoteMode.IsEnabled = false;
                     break;
                 case ConnectionState.Discovering:
-                    TxtStatus.Text = "🟡 Waiting for Client...";
+                    TxtStatus.Text = "🟡 Linux Client bekleniyor";
                     TxtStatus.Foreground = (SolidColorBrush)FindResource("BrushWarning");
                     _trayService.UpdateState(TrayIconState.Connecting, "Host - Waiting");
                     BtnRemoteMode.IsEnabled = false;
                     break;
                 case ConnectionState.Connecting:
-                    TxtStatus.Text = "🟡 Connecting...";
+                    TxtStatus.Text = "🟡 Güvenli bağlantı kuruluyor";
                     TxtStatus.Foreground = (SolidColorBrush)FindResource("BrushWarning");
                     BtnRemoteMode.IsEnabled = false;
                     break;
                 case ConnectionState.Connected:
-                    TxtStatus.Text = "🟢 Connected";
+                    TxtStatus.Text = "🟢 Client bağlandı";
                     TxtStatus.Foreground = (SolidColorBrush)FindResource("BrushSuccess");
                     _trayService.UpdateState(TrayIconState.ConnectedLocal, "Host - Connected");
                     BtnRemoteMode.IsEnabled = true;
                     break;
                 case ConnectionState.Reconnecting:
-                    TxtStatus.Text = "🟡 Reconnecting...";
+                    TxtStatus.Text = "🟡 Yeniden bağlanılıyor";
                     TxtStatus.Foreground = (SolidColorBrush)FindResource("BrushWarning");
                     _trayService.UpdateState(TrayIconState.Connecting, "Host - Waiting");
                     BtnRemoteMode.IsEnabled = false;
@@ -169,7 +169,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.Invoke(() =>
         {
-            TxtDetails.Text = $"Latency: {latencyMs} ms";
+            TxtDetails.Text = $"Gecikme: {latencyMs} ms";
             _trayService.UpdateLatency(latencyMs);
         });
     }
