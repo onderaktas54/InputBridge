@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace InputBridge.Core.Protocol;
@@ -12,12 +13,19 @@ public record SessionInfo(byte[] AesKey, string RemoteHostname, string RemoteVer
 
 public sealed class HandshakeManager
 {
+    private const int MaxHandshakeLineChars = 4096;
+    private static readonly string AppVersion =
+        typeof(HandshakeManager).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+
     // Minimal JSON models for handshaking
     private record HandshakeChallenge(byte[] Challenge);
     private record HandshakeResponse(byte[] HmacResponse, string Hostname, string Version);
     private record HandshakeConfirmation(byte[] EncryptedAesKey);
 
-    public async Task<SessionInfo?> PerformAsHost(TcpClient client, string sharedSecret)
+    public async Task<SessionInfo?> PerformAsHost(
+        TcpClient client,
+        string sharedSecret,
+        CancellationToken ct = default)
     {
         var stream = client.GetStream();
         using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
@@ -28,10 +36,11 @@ public sealed class HandshakeManager
         RandomNumberGenerator.Fill(challenge);
 
         // 2. Send challenge
-        await writer.WriteLineAsync(JsonSerializer.Serialize(new HandshakeChallenge(challenge)));
+        await writer.WriteLineAsync(
+            JsonSerializer.Serialize(new HandshakeChallenge(challenge)).AsMemory(), ct);
 
         // 3. Receive client response
-        string? responseJson = await reader.ReadLineAsync();
+        string? responseJson = await ReadLineLimitedAsync(reader, ct);
         if (responseJson == null) return null;
 
         var response = JsonSerializer.Deserialize<HandshakeResponse>(responseJson);
@@ -51,8 +60,7 @@ public sealed class HandshakeManager
         var sessionKey = new byte[32];
         RandomNumberGenerator.Fill(sessionKey);
 
-        // Encrypt the session key with the shared secret (using simple XOR + HMAC for MVP, or just transmit over TLS if we had one)
-        // Here we encrypt the session key using AesGcm with the shared secret (derived to 32 bytes)
+        // Preserve the v1 wire format: derive a 32-byte wrapping key from the shared secret.
         byte[] derivedSecret = SHA256.HashData(secretBytes); // Ensure exactly 32 bytes
         var iv = new byte[12];
         RandomNumberGenerator.Fill(iv);
@@ -67,19 +75,23 @@ public sealed class HandshakeManager
         Buffer.BlockCopy(tag, 0, encryptedPayload, 12, 16);
         Buffer.BlockCopy(cipherKey, 0, encryptedPayload, 28, 32);
 
-        await writer.WriteLineAsync(JsonSerializer.Serialize(new HandshakeConfirmation(encryptedPayload)));
+        await writer.WriteLineAsync(
+            JsonSerializer.Serialize(new HandshakeConfirmation(encryptedPayload)).AsMemory(), ct);
 
         return new SessionInfo(sessionKey, response.Hostname, response.Version);
     }
 
-    public async Task<SessionInfo?> PerformAsClient(TcpClient client, string sharedSecret)
+    public async Task<SessionInfo?> PerformAsClient(
+        TcpClient client,
+        string sharedSecret,
+        CancellationToken ct = default)
     {
         var stream = client.GetStream();
         using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
         using var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
 
         // 1. Receive challenge
-        string? challengeJson = await reader.ReadLineAsync();
+        string? challengeJson = await ReadLineLimitedAsync(reader, ct);
         if (challengeJson == null) return null;
 
         var challenge = JsonSerializer.Deserialize<HandshakeChallenge>(challengeJson);
@@ -91,10 +103,11 @@ public sealed class HandshakeManager
         byte[] hmacResult = hmac.ComputeHash(challenge.Challenge);
 
         // 3. Send response
-        await writer.WriteLineAsync(JsonSerializer.Serialize(new HandshakeResponse(hmacResult, Environment.MachineName, "0.1.0")));
+        await writer.WriteLineAsync(
+            JsonSerializer.Serialize(new HandshakeResponse(hmacResult, Environment.MachineName, AppVersion)).AsMemory(), ct);
 
         // 4. Receive confirmation (Session Key)
-        string? confJson = await reader.ReadLineAsync();
+        string? confJson = await ReadLineLimitedAsync(reader, ct);
         if (confJson == null) return null;
 
         var confirmation = JsonSerializer.Deserialize<HandshakeConfirmation>(confJson);
@@ -112,7 +125,7 @@ public sealed class HandshakeManager
 
         byte[] derivedSecret = SHA256.HashData(secretBytes);
         using var aes = new AesGcm(derivedSecret, 16);
-        
+
         try
         {
             aes.Decrypt(iv, cipherKey, tag, sessionKey);
@@ -122,6 +135,27 @@ public sealed class HandshakeManager
             return null; // Key decryption failed
         }
 
-        return new SessionInfo(sessionKey, "Host", "0.1.0"); // In a real scenario host name could be transmitted too
+        return new SessionInfo(sessionKey, "Host", "unknown"); // Protocol v1 does not send host metadata.
+    }
+
+    private static async Task<string?> ReadLineLimitedAsync(StreamReader reader, CancellationToken ct)
+    {
+        var line = new StringBuilder();
+        var character = new char[1];
+
+        while (line.Length <= MaxHandshakeLineChars)
+        {
+            int read = await reader.ReadAsync(character.AsMemory(), ct);
+            if (read == 0) return line.Length == 0 ? null : line.ToString();
+            if (character[0] == '\n')
+            {
+                if (line.Length > 0 && line[^1] == '\r') line.Length--;
+                return line.ToString();
+            }
+
+            line.Append(character[0]);
+        }
+
+        throw new InvalidDataException("Handshake message exceeds the allowed size.");
     }
 }

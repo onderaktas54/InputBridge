@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+      - name: Publish
+        run: >-
+          dotnet publish src/InputBridge.Linux/InputBridge.Linux.csproj
+          -c Release -r linux-x64 --self-contained
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish/linux
+      - name: Add documentation and package
+        run: |
+          cp docs/LINUX.md packaging/99-inputbridge.rules publish/linux/
+          tar -C publish/linux -czf "InputBridge_Linux_x64_${{ github.ref_name }}.tar.gz" .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-release
+          path: InputBridge_Linux_x64_*.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+      - name: Publish host and client
+        shell: pwsh
+        run: |
+          dotnet publish src/InputBridge.Host/InputBridge.Host.csproj -c Release -r win-x64 --self-contained -o publish/host
+          dotnet publish src/InputBridge.Client/InputBridge.Client.csproj -c Release -r win-x64 --self-contained -o publish/client
+          Compress-Archive -Path publish/host/* -DestinationPath "InputBridge_Host_${{ github.ref_name }}.zip"
+          Compress-Archive -Path publish/client/* -DestinationPath "InputBridge_Client_${{ github.ref_name }}.zip"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-release
+          path: InputBridge_*_${{ github.ref_name }}.zip
+
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Generate checksums
+        run: sha256sum artifacts/InputBridge_* > artifacts/SHA256SUMS
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" artifacts/InputBridge_* artifacts/SHA256SUMS
+          --verify-tag --generate-notes --title "InputBridge $GITHUB_REF_NAME"

@@ -7,25 +7,26 @@ using InputBridge.Host.Hooks;
 
 namespace InputBridge.Host.Services;
 
-public enum RoutingMode 
-{ 
-    Local, 
-    Remote 
+public enum RoutingMode
+{
+    Local,
+    Remote
 }
 
 public sealed class InputRouter : IDisposable
 {
     private RoutingMode _currentMode = RoutingMode.Local;
-    
+
     private readonly KeyboardHook _keyboard;
     private readonly MouseHook _mouse;
     private readonly HotkeyManager _hotkeys;
-    
+
     // Transports (we assume they are initialized and connected by ConnectionManager)
     // We can inject interfaces here. In reality, ConnectionManager sets these up.
     private ITransport? _udpTransport;
     private ITransport? _tcpTransport;
     private AesTransport? _crypto;
+    private readonly object _disconnectLock = new();
 
     public event Action<RoutingMode>? ModeChanged;
     public event Action<string>? NotificationRequested;
@@ -54,6 +55,8 @@ public sealed class InputRouter : IDisposable
 
     public void SwitchMode(RoutingMode targetMode)
     {
+        if (_currentMode == targetMode) return;
+
         if (targetMode == RoutingMode.Remote && (_tcpTransport == null || !_tcpTransport.IsConnected))
         {
             NotificationRequested?.Invoke(" No Connection! Cannot switch to client.");
@@ -65,7 +68,7 @@ public sealed class InputRouter : IDisposable
         bool isRemote = (_currentMode == RoutingMode.Remote);
         _keyboard.SetRemoteMode(isRemote);
         _mouse.SetRemoteMode(isRemote);
-        
+
         if (isRemote)
         {
             NotificationRequested?.Invoke(" Control: Client PC");
@@ -94,33 +97,14 @@ public sealed class InputRouter : IDisposable
             Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         };
 
-        try
-        {
-            var rawData = PacketSerializer.Serialize(packet);
-            var encrypted = _crypto.Encrypt(rawData);
-            _ = _tcpTransport.SendAsync(encrypted);
-        }
-        catch (Exception)
-        {
-            // If TCP fails, we should drop back to local mode immediately
-            SwitchMode(RoutingMode.Local);
-        }
+        _ = SendTcpPacketAsync(packet);
     }
 
     private void OnKeyEvent(InputPacket packet)
     {
         if (_currentMode == RoutingMode.Remote && _tcpTransport != null && _crypto != null && _tcpTransport.IsConnected)
         {
-            try
-            {
-                var rawData = PacketSerializer.Serialize(packet);
-                var encrypted = _crypto.Encrypt(rawData);
-                _ = _tcpTransport.SendAsync(encrypted); // TCP for keys to prevent drops
-            }
-            catch
-            {
-                SwitchMode(RoutingMode.Local);
-            }
+            _ = SendTcpPacketAsync(packet);
         }
     }
 
@@ -128,20 +112,65 @@ public sealed class InputRouter : IDisposable
     {
         if (_currentMode == RoutingMode.Remote && _udpTransport != null && _crypto != null && _udpTransport.IsConnected)
         {
-            try
-            {
-                var rawData = PacketSerializer.Serialize(packet);
-                var encrypted = _crypto.Encrypt(rawData);
-                _ = _udpTransport.SendAsync(encrypted); // UDP for fast mouse movements
-            }
-            catch
-            {
-                // Unlikely to catch exception on UDP send unless socket disposed
-            }
+            _ = SendUdpPacketAsync(packet);
         }
     }
-    
+
+    private async Task SendTcpPacketAsync(InputPacket packet)
+    {
+        ITransport? transport = null;
+        try
+        {
+            transport = _tcpTransport;
+            AesTransport? crypto = _crypto;
+            if (transport == null || crypto == null) return;
+
+            byte[] encrypted = crypto.Encrypt(PacketSerializer.Serialize(packet));
+            await transport.SendAsync(encrypted);
+        }
+        catch
+        {
+            if (transport != null) HandleSendFailure(transport);
+        }
+    }
+
+    private async Task SendUdpPacketAsync(InputPacket packet)
+    {
+        ITransport? transport = null;
+        try
+        {
+            transport = _udpTransport;
+            AesTransport? crypto = _crypto;
+            if (transport == null || crypto == null) return;
+
+            byte[] encrypted = crypto.Encrypt(PacketSerializer.Serialize(packet));
+            await transport.SendAsync(encrypted);
+        }
+        catch
+        {
+            if (transport != null) HandleSendFailure(transport);
+        }
+    }
+
+    private void HandleSendFailure(ITransport failedTransport)
+    {
+        lock (_disconnectLock)
+        {
+            if (!ReferenceEquals(_tcpTransport, failedTransport) &&
+                !ReferenceEquals(_udpTransport, failedTransport)) return;
+            HandleDisconnectLocked();
+        }
+    }
+
     public void HandleDisconnect()
+    {
+        lock (_disconnectLock)
+        {
+            HandleDisconnectLocked();
+        }
+    }
+
+    private void HandleDisconnectLocked()
     {
         if (_currentMode == RoutingMode.Remote)
         {
@@ -150,9 +179,10 @@ public sealed class InputRouter : IDisposable
             _mouse.SetRemoteMode(false);
             ModeChanged?.Invoke(RoutingMode.Local);
         }
-        
+
         try { _udpTransport?.Dispose(); } catch { }
         try { _tcpTransport?.Dispose(); } catch { }
+        try { _crypto?.Dispose(); } catch { }
         _udpTransport = null;
         _tcpTransport = null;
         _crypto = null;

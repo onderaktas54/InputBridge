@@ -55,7 +55,7 @@ public partial class MainWindow : Window
         BtnRemoteMode.Click += (s, e) => _inputRouter.SwitchMode(RoutingMode.Remote);
 
         Loaded += InitializeApp;
-        Closing += (s, e) => 
+        Closing += (s, e) =>
         {
             e.Cancel = true;
             Hide();
@@ -66,13 +66,13 @@ public partial class MainWindow : Window
     {
         _keyboardHook.Install();
         _mouseHook.Install();
-        
+
         RefreshHotkeys();
 
         UpdateModeUI(RoutingMode.Local);
-        
+
         TxtTcpPort.Text = _appSettings.Network.HostPort.ToString();
-        TxtSecret.Text = _appSettings.Security.SharedSecret;
+        TxtSecret.Password = _appSettings.Security.SharedSecret;
     }
 
     private string FormatHotkeyForDisplay(string rawHotkey)
@@ -102,13 +102,22 @@ public partial class MainWindow : Window
 
     private void BtnConnect_Click(object sender, RoutedEventArgs e)
     {
-        _connectionManager.Stop();
-        _connectionManager.SharedSecret = TxtSecret.Text;
-        if (int.TryParse(TxtTcpPort.Text, out int port))
+        if (TxtSecret.Password.Length < 16)
         {
-            _connectionManager.TcpPort = port;
-            _connectionManager.UdpPort = port - 1; // Normally just -1 of TCP port convention if they don't explicitly want UDP port
+            MessageBox.Show("Use a shared secret of at least 16 characters.", "InputBridge", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
         }
+
+        if (!int.TryParse(TxtTcpPort.Text, out int port) || port is < 2 or > 65535)
+        {
+            MessageBox.Show("Enter a valid TCP port between 2 and 65535.", "InputBridge", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        _connectionManager.Stop();
+        _connectionManager.SharedSecret = TxtSecret.Password;
+        _connectionManager.TcpPort = port;
+        _connectionManager.UdpPort = port - 1;
         _connectionManager.Start();
     }
 

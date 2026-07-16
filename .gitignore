@@ -33,3 +33,10 @@ publish/
 build*.ps1
 build*.log
 build*.txt
+
+# Keep documentation markdown (overrides the blanket *.md ignore above)
+!docs/*.md
+
+# Local build logs / publish output (not for the repo)
+build.txt
+publish/

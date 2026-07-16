@@ -36,7 +36,7 @@ public sealed class KeyboardHook : IDisposable
 
     private IntPtr _hookId = IntPtr.Zero;
     private readonly LowLevelKeyboardProc _proc;
-    
+
     private bool _isRemoteMode = false;
     private uint _nextSeq = 1;
 
@@ -60,7 +60,7 @@ public sealed class KeyboardHook : IDisposable
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
-    
+
     private const byte KEYEVENTF_KEYUP = 0x02;
     private const byte VK_SHIFT_KEY = 0x10;
     private const byte VK_LWIN_KEY = 0x5B;
@@ -104,7 +104,7 @@ public sealed class KeyboardHook : IDisposable
                     }
 
                     // Block the input from reaching the OS
-                    return (IntPtr)1; 
+                    return (IntPtr)1;
                 }
             }
         }
@@ -118,7 +118,7 @@ public sealed class KeyboardHook : IDisposable
 
         using var curProcess = Process.GetCurrentProcess();
         using var curModule = curProcess.MainModule;
-        
+
         if (curModule?.ModuleName != null)
         {
             _hookId = SetWindowsHookEx(WH_KEYBOARD_LL, _proc, GetModuleHandle(curModule.ModuleName), 0);

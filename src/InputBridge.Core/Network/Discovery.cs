@@ -22,7 +22,7 @@ public sealed class DiscoveryService
     {
         using var udpClient = new UdpClient();
         udpClient.EnableBroadcast = true;
-        
+
         string message = $"{Magic}:v1:{hostname}:{listenPort}";
         byte[] data = Encoding.UTF8.GetBytes(message);
         var endPoint = new IPEndPoint(IPAddress.Broadcast, DiscoveryPort);

@@ -65,6 +65,19 @@ public class SettingsManagerTests : IDisposable
         loadedSettings.Mode.Should().Be("auto"); // Default properties will be present
     }
 
+    [Fact]
+    public void Save_ShouldNotPersistSharedSecret()
+    {
+        var manager = new SettingsManager(_testConfigPath);
+        var settings = new AppSettings();
+        settings.Security.SharedSecret = "do-not-write-this-secret";
+
+        manager.Save(settings);
+
+        File.ReadAllText(_testConfigPath).Should().NotContain("do-not-write-this-secret");
+        manager.Load().Security.SharedSecret.Should().BeEmpty();
+    }
+
     public void Dispose()
     {
         var dir = Path.GetDirectoryName(_testConfigPath);

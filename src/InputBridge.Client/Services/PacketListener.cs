@@ -23,10 +23,10 @@ public sealed class PacketListener : IDisposable
     public event Action<int>? SwitchModeRequested; // 0 for Local (Client control), 1 for Remote (Host control)
 
     public PacketListener(
-        KeyboardSimulator keyboard, 
-        MouseSimulator mouse, 
-        ITransport udpTransport, 
-        ITransport tcpTransport, 
+        KeyboardSimulator keyboard,
+        MouseSimulator mouse,
+        ITransport udpTransport,
+        ITransport tcpTransport,
         AesTransport crypto)
     {
         _keyboard = keyboard;
@@ -62,7 +62,7 @@ public sealed class PacketListener : IDisposable
                 var decrypted = _crypto.Decrypt(encrypted);
                 var packet = PacketSerializer.Deserialize(decrypted);
 
-                if (packet.SequenceNumber <= _lastUdpSeq && packet.SequenceNumber != 0) 
+                if (packet.SequenceNumber == 0 || packet.SequenceNumber <= _lastUdpSeq)
                     continue;
 
                 _lastUdpSeq = packet.SequenceNumber;

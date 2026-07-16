@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [master, feat/linux-support]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+      - name: Test core
+        run: dotnet test tests/InputBridge.Core.Tests/InputBridge.Core.Tests.csproj -c Release
+      - name: Test Linux edition
+        run: dotnet test tests/InputBridge.Linux.Tests/InputBridge.Linux.Tests.csproj -c Release
+      - name: Publish Linux x64
+        run: >-
+          dotnet publish src/InputBridge.Linux/InputBridge.Linux.csproj
+          -c Release -r linux-x64 --self-contained
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+      - name: Publish Windows host
+        run: dotnet publish src/InputBridge.Host/InputBridge.Host.csproj -c Release -r win-x64 --self-contained
+      - name: Publish Windows client
+        run: dotnet publish src/InputBridge.Client/InputBridge.Client.csproj -c Release -r win-x64 --self-contained

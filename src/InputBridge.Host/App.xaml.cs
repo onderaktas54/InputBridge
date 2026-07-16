@@ -1,8 +1,8 @@
-﻿using System.Configuration;
+﻿using System;
+using System.Configuration;
 using System.Data;
-using System.Windows;
 using System.Runtime.InteropServices;
-using System;
+using System.Windows;
 using Serilog;
 
 namespace InputBridge.Host;

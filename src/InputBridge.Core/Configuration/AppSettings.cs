@@ -33,6 +33,7 @@ public class MouseSettings
 public class SecuritySettings
 {
     public bool EncryptionEnabled { get; set; } = true;
+    [JsonIgnore]
     public string SharedSecret { get; set; } = "";
     public bool AutoApproveKnownDevices { get; set; } = true;
 }
@@ -69,7 +70,7 @@ public sealed class SettingsManager
 {
     public static readonly string ConfigDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "InputBridge");
-    
+
     public string ConfigPath { get; }
 
     public event Action<AppSettings>? SettingsChanged;

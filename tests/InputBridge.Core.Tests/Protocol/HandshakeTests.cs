@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -18,9 +19,9 @@ public class HandshakeTests
     public async Task Handshake_WithCorrectSecret_ShouldExchangeSessionKey()
     {
         // Arrange
-        int port = 45005;
-        var listener = new TcpListener(IPAddress.Loopback, port);
+        var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
         var manager = new HandshakeManager();
 
@@ -48,9 +49,9 @@ public class HandshakeTests
     public async Task Handshake_WithWrongSecret_ShouldFail()
     {
         // Arrange
-        int port = 45006;
-        var listener = new TcpListener(IPAddress.Loopback, port);
+        var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
         var manager = new HandshakeManager();
 
@@ -63,6 +64,7 @@ public class HandshakeTests
 
         var serverClient = await listener.AcceptTcpClientAsync();
         var hostSession = await manager.PerformAsHost(serverClient, SharedSecret);
+        serverClient.Dispose();
 
         // Attempt to wait for client without throwing to let the assert run
         SessionInfo? clientSession = null;
@@ -73,5 +75,51 @@ public class HandshakeTests
         // Assert
         hostSession.Should().BeNull("Host should reject wrong secret");
         clientSession.Should().BeNull("Client should fail as host closes connection or HMAC mismatch");
+    }
+
+    [Fact]
+    public async Task Handshake_WhenPeerStalls_ShouldHonorCancellation()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        using var idlePeer = new TcpClient();
+        Task connectTask = idlePeer.ConnectAsync(IPAddress.Loopback, port);
+        using TcpClient serverClient = await listener.AcceptTcpClientAsync();
+        await connectTask;
+
+        var manager = new HandshakeManager();
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
+
+        Func<Task> act = () => manager.PerformAsHost(serverClient, SharedSecret, cts.Token);
+        await act.Should().ThrowAsync<OperationCanceledException>();
+
+        listener.Stop();
+    }
+
+    [Fact]
+    public async Task Handshake_WhenMessageIsOversized_ShouldRejectIt()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        using var rawClient = new TcpClient();
+        Task connectTask = rawClient.ConnectAsync(IPAddress.Loopback, port);
+        using TcpClient serverClient = await listener.AcceptTcpClientAsync();
+        await connectTask;
+        listener.Stop();
+
+        var manager = new HandshakeManager();
+        Task<SessionInfo?> hostTask = manager.PerformAsHost(serverClient, SharedSecret);
+
+        using var reader = new StreamReader(rawClient.GetStream(), Encoding.UTF8, leaveOpen: true);
+        using var writer = new StreamWriter(rawClient.GetStream(), Encoding.UTF8, leaveOpen: true) { AutoFlush = true };
+        (await reader.ReadLineAsync()).Should().NotBeNull();
+        await writer.WriteLineAsync(new string('A', 4097));
+
+        Func<Task> act = async () => await hostTask;
+        await act.Should().ThrowAsync<InvalidDataException>();
     }
 }

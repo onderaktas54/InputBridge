@@ -32,7 +32,7 @@ public partial class MainWindow : Window
 
         // Don't auto-start. Wait for user to click Connect.
         // Loaded += (s, e) => _connectionManager.Start();
-        Closing += (s, e) => 
+        Closing += (s, e) =>
         {
             // Just hide the window by default instead of closing, unless exiting
             e.Cancel = true;
@@ -47,8 +47,14 @@ public partial class MainWindow : Window
 
     private void BtnConnect_Click(object sender, RoutedEventArgs e)
     {
+        if (TxtSecret.Password.Length < 16)
+        {
+            MessageBox.Show("Use the same shared secret as the Host (at least 16 characters).", "InputBridge", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         _connectionManager.Stop(); // Stop if running
-        _connectionManager.SharedSecret = TxtSecret.Text;
+        _connectionManager.SharedSecret = TxtSecret.Password;
         _connectionManager.Start();
     }
 
