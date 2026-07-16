@@ -70,27 +70,27 @@ public partial class MainWindow : Window
             switch (state)
             {
                 case ConnectionState.Disconnected:
-                    TxtStatus.Text = "🔴 Disconnected";
+                    TxtStatus.Text = "🔴 Bağlantı kapalı";
                     TxtStatus.Foreground = (SolidColorBrush)FindResource("BrushError");
                     _trayService.UpdateState(TrayIconState.Disconnected, "InputBridge Client - Disconnected");
                     break;
                 case ConnectionState.Discovering:
-                    TxtStatus.Text = "🟡 Searching for Host...";
+                    TxtStatus.Text = "🟡 Host aranıyor";
                     TxtStatus.Foreground = (SolidColorBrush)FindResource("BrushWarning");
                     _trayService.UpdateState(TrayIconState.Connecting, "InputBridge Client - Searching");
                     break;
                 case ConnectionState.Connecting:
-                    TxtStatus.Text = "🟡 Connecting...";
+                    TxtStatus.Text = "🟡 Güvenli bağlantı kuruluyor";
                     TxtStatus.Foreground = (SolidColorBrush)FindResource("BrushWarning");
                     _trayService.UpdateState(TrayIconState.Connecting, "InputBridge Client - Connecting");
                     break;
                 case ConnectionState.Connected:
-                    TxtStatus.Text = "🟢 Connected (Control on Host)";
+                    TxtStatus.Text = "🟢 Host'a bağlandı";
                     TxtStatus.Foreground = (SolidColorBrush)FindResource("BrushSuccess");
                     _trayService.UpdateState(TrayIconState.ConnectedRemote, "InputBridge Client - Connected");
                     break;
                 case ConnectionState.Reconnecting:
-                    TxtStatus.Text = "🟡 Reconnecting...";
+                    TxtStatus.Text = "🟡 Yeniden bağlanılıyor";
                     TxtStatus.Foreground = (SolidColorBrush)FindResource("BrushWarning");
                     _trayService.UpdateState(TrayIconState.Connecting, "InputBridge Client - Reconnecting");
                     break;

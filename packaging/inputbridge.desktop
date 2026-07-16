@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=InputBridge
+Comment=Share a keyboard and mouse securely across your local network
+Exec=inputbridge-linux
+Icon=inputbridge
+Terminal=false
+Categories=Network;Utility;
+Keywords=keyboard;mouse;kvm;remote;input;
+StartupNotify=true
