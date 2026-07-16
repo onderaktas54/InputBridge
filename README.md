@@ -11,6 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Platform" />
+  <img src="https://img.shields.io/badge/Platform-Linux%20(X11%2FWayland)-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux" />
   <img src="https://img.shields.io/badge/.NET-8.0-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 8" />
   <img src="https://img.shields.io/badge/Encryption-AES--256--GCM-E53935?style=for-the-badge&logo=letsencrypt&logoColor=white" alt="AES-256" />
   <img src="https://img.shields.io/badge/License-MIT-43A047?style=for-the-badge" alt="MIT License" />
@@ -40,6 +41,27 @@
 </p>
 
 > **Example use case:** You have a work PC and a personal PC on the same desk. Instead of switching between two keyboards, InputBridge lets you press `Ctrl+Win+2` to redirect all your input to the second computer — and `Ctrl+Win+1` to switch back. It's instant, encrypted, and zero-latency on LAN.
+
+---
+
+## 🐧 Linux support
+
+InputBridge now ships a **Linux edition** (`src/InputBridge.Linux`) — a headless console
+app that speaks the **same protocol** as the Windows apps, so Linux and Windows machines
+interoperate seamlessly. Mix and match: control a Linux box from Windows, or drive Windows
+PCs from Linux.
+
+It captures/injects input at the kernel layer (**evdev** + **`/dev/uinput`**), so it works
+under **both X11 and Wayland**.
+
+```bash
+dotnet build src/InputBridge.Linux/InputBridge.Linux.csproj -c Release
+
+sudo ./inputbridge-linux client --secret mypass   # be controlled by a Host
+sudo ./inputbridge-linux host   --secret mypass   # control another machine
+```
+
+Full guide → **[docs/LINUX.md](docs/LINUX.md)** (hotkeys, udev rule for sudo-less use, interop notes).
 
 ---
 

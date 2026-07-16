@@ -1,0 +1,5 @@
+# InputBridge — allow the "input" group to use uinput and evdev without root.
+# Install: sudo cp 99-inputbridge.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger
+# Then: sudo usermod -aG input "$USER"  (log out/in)  and  sudo modprobe uinput
+KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
+KERNEL=="event*", SUBSYSTEM=="input", MODE="0640", GROUP="input"
