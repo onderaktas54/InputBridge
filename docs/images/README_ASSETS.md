@@ -1,6 +1,6 @@
 # README visual assets
 
-## hero_banner.png
+## inputbridge_hero_v2.png
 
 - Purpose: GitHub repository README hero
 - Dimensions: 1942 × 809 pixels

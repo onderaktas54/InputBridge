@@ -31,7 +31,7 @@
 
 <p align="center">
   <a href="https://github.com/onderaktas54/InputBridge/releases/latest">
-    <img src="docs/images/hero_banner.png" alt="Two computers connected by InputBridge, sharing one keyboard and mouse" width="100%" />
+    <img src="docs/images/inputbridge_hero_v2.png" alt="Two computers connected by InputBridge, sharing one keyboard and mouse" width="100%" />
   </a>
 </p>
 
